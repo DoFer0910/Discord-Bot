@@ -14,6 +14,8 @@ import {
 } from 'discord.js';
 import { sendRolePanels } from './panels.js';
 import { handleRoleButton } from './interactions.js';
+import { fetchScheduleEmbeds } from './schedule.js';
+import { startAutoSchedule } from './autoSchedule.js';
 
 // 環境変数の検証
 const { DISCORD_TOKEN, CLIENT_ID } = process.env;
@@ -37,6 +39,10 @@ const commands = [
         .setDescription('ロール選択パネルをこのチャンネルに設置します')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON(),
+    new SlashCommandBuilder()
+        .setName('schedule')
+        .setDescription('現在と次回のスプラトゥーン3スケジュールを表示します')
+        .toJSON(),
 ];
 
 // Bot 起動時の処理
@@ -51,6 +57,9 @@ client.once('ready', async () => {
     } catch (error) {
         console.error('❌ スラッシュコマンド登録エラー:', error);
     }
+
+    // スケジュール自動送信を開始
+    startAutoSchedule(client);
 });
 
 // インタラクション処理
@@ -69,6 +78,17 @@ client.on('interactionCreate', async (interaction) => {
                 await interaction.editReply({
                     content: '❌ パネルの送信に失敗しました。',
                 });
+            }
+        }
+
+        // /schedule コマンド処理
+        if (interaction.commandName === 'schedule') {
+            await interaction.deferReply();
+            const result = await fetchScheduleEmbeds();
+            if (result.error) {
+                await interaction.editReply({ content: `❌ ${result.error}` });
+            } else {
+                await interaction.editReply({ embeds: result.embeds });
             }
         }
         return;
