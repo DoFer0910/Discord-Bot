@@ -2,12 +2,21 @@
  * スケジュール自動送信モジュール
  * JST 1:01, 3:01, 5:01, ..., 23:01 に自動でスケジュールを送信
  * Bot起動時にも即座に1回送信する
+ * 前回送信メッセージは自動削除し、最新のみ表示
+ * 設定登録済みユーザーにはDMで個別配信
  */
 
 import { fetchScheduleEmbeds } from './schedule.js';
+import { getRegisteredUserIds, getUserFilter } from './schedulePrefs.js';
 
 // 自動送信間隔: 2時間（ミリ秒）
 const INTERVAL_MS = 2 * 60 * 60 * 1000;
+
+// 前回チャンネルに送信したメッセージID配列
+let previousChannelMessageIds = [];
+
+// ユーザーごとの前回DMメッセージID（Map<userId, messageId[]>）
+const previousDmMessageIds = new Map();
 
 /**
  * 次回の送信時刻（JST奇数時1分）までのミリ秒を計算
@@ -57,7 +66,41 @@ function getMillisUntilNextScheduledTime() {
 }
 
 /**
- * スケジュールをチャンネルに送信
+ * 前回のチャンネルメッセージを削除
+ * @param {TextChannel} channel - 対象チャンネル
+ */
+async function deletePreviousChannelMessages(channel) {
+    for (const msgId of previousChannelMessageIds) {
+        try {
+            const msg = await channel.messages.fetch(msgId);
+            await msg.delete();
+        } catch {
+            // 既に削除済み or 権限不足の場合は無視
+        }
+    }
+    previousChannelMessageIds = [];
+}
+
+/**
+ * 前回のDMメッセージを削除
+ * @param {DMChannel} dmChannel - DM チャンネル
+ * @param {string} userId - ユーザーID
+ */
+async function deletePreviousDmMessages(dmChannel, userId) {
+    const msgIds = previousDmMessageIds.get(userId) || [];
+    for (const msgId of msgIds) {
+        try {
+            const msg = await dmChannel.messages.fetch(msgId);
+            await msg.delete();
+        } catch {
+            // 既に削除済み or 権限不足の場合は無視
+        }
+    }
+    previousDmMessageIds.delete(userId);
+}
+
+/**
+ * スケジュールをチャンネルに送信（現在と次回を分けて送信）
  * @param {TextChannel} channel - 送信先チャンネル
  */
 async function sendScheduleToChannel(channel) {
@@ -69,12 +112,88 @@ async function sendScheduleToChannel(channel) {
             return;
         }
 
-        // Discord は1メッセージに最大10個のEmbedを送信可能
-        // 現在+次回で最大8個なので1メッセージで送信可能
-        await channel.send({ embeds: result.embeds });
+        // 前回メッセージを削除
+        await deletePreviousChannelMessages(channel);
+
+        const newMessageIds = [];
+
+        // 現在のスケジュールを送信
+        if (result.currentEmbeds.length > 0) {
+            const currentMsg = await channel.send({
+                content: '📅 **＝＝＝ 現在のスケジュール ＝＝＝**',
+                embeds: result.currentEmbeds,
+            });
+            newMessageIds.push(currentMsg.id);
+        }
+
+        // 次回のスケジュールを送信（別メッセージで区切り）
+        if (result.nextEmbeds.length > 0) {
+            const nextMsg = await channel.send({
+                content: '📅 **＝＝＝ 次回のスケジュール ＝＝＝**',
+                embeds: result.nextEmbeds,
+            });
+            newMessageIds.push(nextMsg.id);
+        }
+
+        // 送信したメッセージIDを保存
+        previousChannelMessageIds = newMessageIds;
+
         console.log('✅ スケジュールを自動送信しました。');
     } catch (error) {
         console.error('❌ スケジュール自動送信エラー:', error);
+    }
+}
+
+/**
+ * 設定登録済みユーザーにDMで個別配信
+ * @param {Client} client - Discord クライアント
+ */
+async function sendScheduleDMs(client) {
+    const userIds = getRegisteredUserIds();
+    if (userIds.length === 0) return;
+
+    for (const userId of userIds) {
+        try {
+            const filter = getUserFilter(userId);
+            if (!filter) continue;
+
+            const result = await fetchScheduleEmbeds(filter);
+            if (result.error) continue;
+
+            // ユーザーのDMチャンネルを取得
+            const user = await client.users.fetch(userId);
+            const dmChannel = await user.createDM();
+
+            // 前回DMメッセージを削除
+            await deletePreviousDmMessages(dmChannel, userId);
+
+            const dmMsgIds = [];
+
+            // 現在のスケジュールをDM送信
+            if (result.currentEmbeds.length > 0) {
+                const msg = await dmChannel.send({
+                    content: '📅 **＝＝＝ 現在のスケジュール ＝＝＝**',
+                    embeds: result.currentEmbeds,
+                });
+                dmMsgIds.push(msg.id);
+            }
+
+            // 次回のスケジュールをDM送信
+            if (result.nextEmbeds.length > 0) {
+                const msg = await dmChannel.send({
+                    content: '📅 **＝＝＝ 次回のスケジュール ＝＝＝**',
+                    embeds: result.nextEmbeds,
+                });
+                dmMsgIds.push(msg.id);
+            }
+
+            // DMメッセージIDを保存
+            previousDmMessageIds.set(userId, dmMsgIds);
+
+            console.log(`📩 ユーザー ${user.tag} にDMスケジュールを送信しました。`);
+        } catch (error) {
+            console.error(`⚠️ ユーザー ${userId} へのDM送信に失敗:`, error.message);
+        }
     }
 }
 
@@ -99,6 +218,7 @@ export function startAutoSchedule(client) {
     // Bot起動時に即座に1回送信
     console.log('📋 Bot起動時スケジュール送信を実行します...');
     sendScheduleToChannel(channel);
+    sendScheduleDMs(client);
 
     // 次回の定期送信時刻までの待機時間を計算
     const msUntilNext = getMillisUntilNextScheduledTime();
@@ -115,10 +235,12 @@ export function startAutoSchedule(client) {
     // 次の定期送信時刻まで待機し、その後2時間ごとに繰り返し
     setTimeout(() => {
         sendScheduleToChannel(channel);
+        sendScheduleDMs(client);
         console.log('⏰ 定期送信タイマー開始（2時間間隔）');
 
         setInterval(() => {
             sendScheduleToChannel(channel);
+            sendScheduleDMs(client);
         }, INTERVAL_MS);
     }, msUntilNext);
 }

@@ -1,14 +1,17 @@
 /**
  * スプラトゥーン3 スケジュール取得・Embed生成モジュール
  * splatoon3.ink API からデータを取得し、Discord Embed に整形する
+ * 日本語ロケールAPI を使用して武器名・ステージ名を日本語化
  */
 
 import { EmbedBuilder } from 'discord.js';
 
 // スケジュールAPI エンドポイント
 const SCHEDULE_API_URL = 'https://splatoon3.ink/data/schedules.json';
+// 日本語ロケールAPI エンドポイント
+const LOCALE_API_URL = 'https://splatoon3.ink/data/locale/ja-JP.json';
 
-// ルール名の英語→日本語マッピング
+// ルール名の英語→日本語マッピング（フォールバック用）
 const RULE_NAME_MAP = {
     'Turf War': 'ナワバリバトル',
     'Splat Zones': 'ガチエリア',
@@ -16,6 +19,56 @@ const RULE_NAME_MAP = {
     'Rainmaker': 'ガチホコバトル',
     'Clam Blitz': 'ガチアサリ',
 };
+
+// ロケールキャッシュ
+let localeCache = null;
+
+/**
+ * 日本語ロケールデータを取得（キャッシュ付き）
+ * @returns {Promise<object|null>} ロケールデータ
+ */
+async function fetchLocale() {
+    if (localeCache) return localeCache;
+
+    try {
+        const response = await fetch(LOCALE_API_URL, {
+            headers: { 'User-Agent': 'SplatoonRoleBot/1.4.0' },
+        });
+        if (response.ok) {
+            localeCache = await response.json();
+            console.log('✅ 日本語ロケールデータを取得しました。');
+        }
+    } catch (error) {
+        console.error('⚠️ ロケールデータの取得に失敗しました:', error.message);
+    }
+    return localeCache;
+}
+
+/**
+ * ステージ名を日本語に変換（ロケールデータ使用）
+ * @param {object} stage - ステージオブジェクト（id, name を含む）
+ * @returns {string} 日本語ステージ名
+ */
+function translateStage(stage) {
+    if (localeCache?.stages?.[stage.id]?.name) {
+        return localeCache.stages[stage.id].name;
+    }
+    return stage.name;
+}
+
+/**
+ * 武器名を日本語に変換（ロケールデータ使用）
+ * @param {object} weapon - 武器オブジェクト（__splatoon3ink_id, name を含む）
+ * @returns {string} 日本語武器名
+ */
+function translateWeapon(weapon) {
+    // splatoon3.ink のロケールデータでは武器IDがハッシュ形式
+    const weaponId = weapon.__splatoon3ink_id || weapon.image?.url;
+    if (weaponId && localeCache?.weapons?.[weaponId]?.name) {
+        return localeCache.weapons[weaponId].name;
+    }
+    return weapon.name;
+}
 
 /**
  * ルール名を日本語に変換
@@ -86,6 +139,30 @@ function findNextNode(nodes) {
 }
 
 /**
+ * ナワバリバトルのEmbedを生成
+ * @param {object} setting - ナワバリバトル設定
+ * @param {string} startTime - 開始時刻
+ * @param {string} endTime - 終了時刻
+ * @param {string} label - 「現在」または「次回」
+ * @returns {EmbedBuilder} Embed
+ */
+function createRegularEmbed(setting, startTime, endTime, label) {
+    const ruleName = translateRule(setting.vsRule.name);
+    const stages = setting.vsStages.map(s => translateStage(s)).join(' / ');
+    const timeRange = `${formatTimeJST(startTime)} 〜 ${formatTimeJST(endTime)}`;
+
+    return new EmbedBuilder()
+        .setTitle(`🟢 【${label}】ナワバリバトル`)
+        .setDescription(`**ルール**: ${ruleName}`)
+        .addFields(
+            { name: '🗺️ ステージ', value: stages },
+            { name: '🕐 時間', value: timeRange },
+        )
+        .setColor(0x19d719)
+        .setTimestamp();
+}
+
+/**
  * バンカラマッチのEmbedを生成
  * @param {object} setting - バンカラマッチ設定
  * @param {string} mode - 'CHALLENGE' または 'OPEN'
@@ -101,7 +178,7 @@ function createBankaraEmbed(setting, mode, startTime, endTime, label) {
     const color = isChallenge ? 0xff6b2b : 0x2dd4bf;
 
     const ruleName = translateRule(setting.vsRule.name);
-    const stages = setting.vsStages.map(s => s.name).join(' / ');
+    const stages = setting.vsStages.map(s => translateStage(s)).join(' / ');
     const timeRange = `${formatTimeJST(startTime)} 〜 ${formatTimeJST(endTime)}`;
 
     return new EmbedBuilder()
@@ -125,7 +202,7 @@ function createBankaraEmbed(setting, mode, startTime, endTime, label) {
  */
 function createXMatchEmbed(setting, startTime, endTime, label) {
     const ruleName = translateRule(setting.vsRule.name);
-    const stages = setting.vsStages.map(s => s.name).join(' / ');
+    const stages = setting.vsStages.map(s => translateStage(s)).join(' / ');
     const timeRange = `${formatTimeJST(startTime)} 〜 ${formatTimeJST(endTime)}`;
 
     return new EmbedBuilder()
@@ -147,8 +224,8 @@ function createXMatchEmbed(setting, startTime, endTime, label) {
  */
 function createSalmonRunEmbed(coopNode, label) {
     const setting = coopNode.setting;
-    const stageName = setting.coopStage.name;
-    const weapons = setting.weapons.map(w => w.name).join('\n');
+    const stageName = translateStage(setting.coopStage);
+    const weapons = setting.weapons.map(w => translateWeapon(w)).join('\n');
     const timeRange = `${formatDateTimeJST(coopNode.startTime)} 〜 ${formatDateTimeJST(coopNode.endTime)}`;
 
     const embed = new EmbedBuilder()
@@ -171,13 +248,18 @@ function createSalmonRunEmbed(coopNode, label) {
 
 /**
  * スケジュールAPIからデータを取得してEmbed配列を生成
- * @returns {Promise<{embeds: EmbedBuilder[]} | {error: string}>} Embed配列またはエラー
+ * 現在と次回を分離して返す
+ * @param {object} [filter] - 表示フィルタ { regular, bankara, xmatch, salmon }
+ * @returns {Promise<{currentEmbeds: EmbedBuilder[], nextEmbeds: EmbedBuilder[]} | {error: string}>}
  */
-export async function fetchScheduleEmbeds() {
+export async function fetchScheduleEmbeds(filter = null) {
     try {
+        // ロケールデータを取得（キャッシュあれば即返却）
+        await fetchLocale();
+
         const response = await fetch(SCHEDULE_API_URL, {
             headers: {
-                'User-Agent': 'SplatoonRoleBot/1.3.0',
+                'User-Agent': 'SplatoonRoleBot/1.4.0',
             },
         });
 
@@ -186,82 +268,127 @@ export async function fetchScheduleEmbeds() {
         }
 
         const data = await response.json();
-        const embeds = [];
+        const currentEmbeds = [];
+        const nextEmbeds = [];
+
+        // フィルタが未指定の場合はすべて表示
+        const showRegular = !filter || filter.regular;
+        const showBankara = !filter || filter.bankara;
+        const showXmatch = !filter || filter.xmatch;
+        const showSalmon = !filter || filter.salmon;
 
         // === 現在のスケジュール ===
         const label = '現在';
 
-        // バンカラマッチ
-        const currentBankara = findCurrentNode(data.data.bankaraSchedules.nodes);
-        if (currentBankara?.bankaraMatchSettings) {
-            for (const setting of currentBankara.bankaraMatchSettings) {
-                embeds.push(createBankaraEmbed(
-                    setting,
-                    setting.bankaraMode,
-                    currentBankara.startTime,
-                    currentBankara.endTime,
+        // ナワバリバトル
+        if (showRegular) {
+            const currentRegular = findCurrentNode(data.data.regularSchedules.nodes);
+            if (currentRegular?.regularMatchSetting) {
+                currentEmbeds.push(createRegularEmbed(
+                    currentRegular.regularMatchSetting,
+                    currentRegular.startTime,
+                    currentRegular.endTime,
                     label,
                 ));
             }
         }
 
+        // バンカラマッチ
+        if (showBankara) {
+            const currentBankara = findCurrentNode(data.data.bankaraSchedules.nodes);
+            if (currentBankara?.bankaraMatchSettings) {
+                for (const setting of currentBankara.bankaraMatchSettings) {
+                    currentEmbeds.push(createBankaraEmbed(
+                        setting,
+                        setting.bankaraMode,
+                        currentBankara.startTime,
+                        currentBankara.endTime,
+                        label,
+                    ));
+                }
+            }
+        }
+
         // Xマッチ
-        const currentX = findCurrentNode(data.data.xSchedules.nodes);
-        if (currentX?.xMatchSetting) {
-            embeds.push(createXMatchEmbed(
-                currentX.xMatchSetting,
-                currentX.startTime,
-                currentX.endTime,
-                label,
-            ));
+        if (showXmatch) {
+            const currentX = findCurrentNode(data.data.xSchedules.nodes);
+            if (currentX?.xMatchSetting) {
+                currentEmbeds.push(createXMatchEmbed(
+                    currentX.xMatchSetting,
+                    currentX.startTime,
+                    currentX.endTime,
+                    label,
+                ));
+            }
         }
 
         // サーモンラン
-        const currentCoop = findCurrentNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
-        if (currentCoop) {
-            embeds.push(createSalmonRunEmbed(currentCoop, label));
+        if (showSalmon) {
+            const currentCoop = findCurrentNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
+            if (currentCoop) {
+                currentEmbeds.push(createSalmonRunEmbed(currentCoop, label));
+            }
         }
 
         // === 次回のスケジュール ===
         const nextLabel = '次回';
 
-        // バンカラマッチ（次回）
-        const nextBankara = findNextNode(data.data.bankaraSchedules.nodes);
-        if (nextBankara?.bankaraMatchSettings) {
-            for (const setting of nextBankara.bankaraMatchSettings) {
-                embeds.push(createBankaraEmbed(
-                    setting,
-                    setting.bankaraMode,
-                    nextBankara.startTime,
-                    nextBankara.endTime,
+        // ナワバリバトル（次回）
+        if (showRegular) {
+            const nextRegular = findNextNode(data.data.regularSchedules.nodes);
+            if (nextRegular?.regularMatchSetting) {
+                nextEmbeds.push(createRegularEmbed(
+                    nextRegular.regularMatchSetting,
+                    nextRegular.startTime,
+                    nextRegular.endTime,
                     nextLabel,
                 ));
             }
         }
 
+        // バンカラマッチ（次回）
+        if (showBankara) {
+            const nextBankara = findNextNode(data.data.bankaraSchedules.nodes);
+            if (nextBankara?.bankaraMatchSettings) {
+                for (const setting of nextBankara.bankaraMatchSettings) {
+                    nextEmbeds.push(createBankaraEmbed(
+                        setting,
+                        setting.bankaraMode,
+                        nextBankara.startTime,
+                        nextBankara.endTime,
+                        nextLabel,
+                    ));
+                }
+            }
+        }
+
         // Xマッチ（次回）
-        const nextX = findNextNode(data.data.xSchedules.nodes);
-        if (nextX?.xMatchSetting) {
-            embeds.push(createXMatchEmbed(
-                nextX.xMatchSetting,
-                nextX.startTime,
-                nextX.endTime,
-                nextLabel,
-            ));
+        if (showXmatch) {
+            const nextX = findNextNode(data.data.xSchedules.nodes);
+            if (nextX?.xMatchSetting) {
+                nextEmbeds.push(createXMatchEmbed(
+                    nextX.xMatchSetting,
+                    nextX.startTime,
+                    nextX.endTime,
+                    nextLabel,
+                ));
+            }
         }
 
         // サーモンラン（次回）
-        const nextCoop = findNextNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
-        if (nextCoop) {
-            embeds.push(createSalmonRunEmbed(nextCoop, nextLabel));
+        if (showSalmon) {
+            const nextCoop = findNextNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
+            if (nextCoop) {
+                nextEmbeds.push(createSalmonRunEmbed(nextCoop, nextLabel));
+            }
         }
 
         // Embedが1つも生成できなかった場合
-        if (embeds.length === 0) {
+        if (currentEmbeds.length === 0 && nextEmbeds.length === 0) {
             return { error: 'スケジュールの取得に失敗しました。時間をおいて再度お試しください。' };
         }
 
-        return { embeds };
+        return { currentEmbeds, nextEmbeds };
     } catch (error) {
         console.error('スケジュール取得エラー:', error);
         return { error: 'スケジュールの取得に失敗しました。時間をおいて再度お試しください。' };
