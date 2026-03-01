@@ -249,10 +249,9 @@ function createSalmonRunEmbed(coopNode, label) {
 /**
  * スケジュールAPIからデータを取得してEmbed配列を生成
  * 現在と次回を分離して返す
- * @param {object} [filter] - 表示フィルタ { regular, bankara, xmatch, salmon }
  * @returns {Promise<{currentEmbeds: EmbedBuilder[], nextEmbeds: EmbedBuilder[]} | {error: string}>}
  */
-export async function fetchScheduleEmbeds(filter = null) {
+export async function fetchScheduleEmbeds() {
     try {
         // ロケールデータを取得（キャッシュあれば即返却）
         await fetchLocale();
@@ -271,116 +270,94 @@ export async function fetchScheduleEmbeds(filter = null) {
         const currentEmbeds = [];
         const nextEmbeds = [];
 
-        // フィルタが未指定の場合はすべて表示
-        const showRegular = !filter || filter.regular;
-        const showBankara = !filter || filter.bankara;
-        const showXmatch = !filter || filter.xmatch;
-        const showSalmon = !filter || filter.salmon;
-
         // === 現在のスケジュール ===
         const label = '現在';
 
         // ナワバリバトル
-        if (showRegular) {
-            const currentRegular = findCurrentNode(data.data.regularSchedules.nodes);
-            if (currentRegular?.regularMatchSetting) {
-                currentEmbeds.push(createRegularEmbed(
-                    currentRegular.regularMatchSetting,
-                    currentRegular.startTime,
-                    currentRegular.endTime,
-                    label,
-                ));
-            }
+        const currentRegular = findCurrentNode(data.data.regularSchedules.nodes);
+        if (currentRegular?.regularMatchSetting) {
+            currentEmbeds.push(createRegularEmbed(
+                currentRegular.regularMatchSetting,
+                currentRegular.startTime,
+                currentRegular.endTime,
+                label,
+            ));
         }
 
         // バンカラマッチ
-        if (showBankara) {
-            const currentBankara = findCurrentNode(data.data.bankaraSchedules.nodes);
-            if (currentBankara?.bankaraMatchSettings) {
-                for (const setting of currentBankara.bankaraMatchSettings) {
-                    currentEmbeds.push(createBankaraEmbed(
-                        setting,
-                        setting.bankaraMode,
-                        currentBankara.startTime,
-                        currentBankara.endTime,
-                        label,
-                    ));
-                }
+        const currentBankara = findCurrentNode(data.data.bankaraSchedules.nodes);
+        if (currentBankara?.bankaraMatchSettings) {
+            for (const setting of currentBankara.bankaraMatchSettings) {
+                currentEmbeds.push(createBankaraEmbed(
+                    setting,
+                    setting.bankaraMode,
+                    currentBankara.startTime,
+                    currentBankara.endTime,
+                    label,
+                ));
             }
         }
 
         // Xマッチ
-        if (showXmatch) {
-            const currentX = findCurrentNode(data.data.xSchedules.nodes);
-            if (currentX?.xMatchSetting) {
-                currentEmbeds.push(createXMatchEmbed(
-                    currentX.xMatchSetting,
-                    currentX.startTime,
-                    currentX.endTime,
-                    label,
-                ));
-            }
+        const currentX = findCurrentNode(data.data.xSchedules.nodes);
+        if (currentX?.xMatchSetting) {
+            currentEmbeds.push(createXMatchEmbed(
+                currentX.xMatchSetting,
+                currentX.startTime,
+                currentX.endTime,
+                label,
+            ));
         }
 
         // サーモンラン
-        if (showSalmon) {
-            const currentCoop = findCurrentNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
-            if (currentCoop) {
-                currentEmbeds.push(createSalmonRunEmbed(currentCoop, label));
-            }
+        const currentCoop = findCurrentNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
+        if (currentCoop) {
+            currentEmbeds.push(createSalmonRunEmbed(currentCoop, label));
         }
 
         // === 次回のスケジュール ===
         const nextLabel = '次回';
 
         // ナワバリバトル（次回）
-        if (showRegular) {
-            const nextRegular = findNextNode(data.data.regularSchedules.nodes);
-            if (nextRegular?.regularMatchSetting) {
-                nextEmbeds.push(createRegularEmbed(
-                    nextRegular.regularMatchSetting,
-                    nextRegular.startTime,
-                    nextRegular.endTime,
-                    nextLabel,
-                ));
-            }
+        const nextRegular = findNextNode(data.data.regularSchedules.nodes);
+        if (nextRegular?.regularMatchSetting) {
+            nextEmbeds.push(createRegularEmbed(
+                nextRegular.regularMatchSetting,
+                nextRegular.startTime,
+                nextRegular.endTime,
+                nextLabel,
+            ));
         }
 
         // バンカラマッチ（次回）
-        if (showBankara) {
-            const nextBankara = findNextNode(data.data.bankaraSchedules.nodes);
-            if (nextBankara?.bankaraMatchSettings) {
-                for (const setting of nextBankara.bankaraMatchSettings) {
-                    nextEmbeds.push(createBankaraEmbed(
-                        setting,
-                        setting.bankaraMode,
-                        nextBankara.startTime,
-                        nextBankara.endTime,
-                        nextLabel,
-                    ));
-                }
+        const nextBankara = findNextNode(data.data.bankaraSchedules.nodes);
+        if (nextBankara?.bankaraMatchSettings) {
+            for (const setting of nextBankara.bankaraMatchSettings) {
+                nextEmbeds.push(createBankaraEmbed(
+                    setting,
+                    setting.bankaraMode,
+                    nextBankara.startTime,
+                    nextBankara.endTime,
+                    nextLabel,
+                ));
             }
         }
 
         // Xマッチ（次回）
-        if (showXmatch) {
-            const nextX = findNextNode(data.data.xSchedules.nodes);
-            if (nextX?.xMatchSetting) {
-                nextEmbeds.push(createXMatchEmbed(
-                    nextX.xMatchSetting,
-                    nextX.startTime,
-                    nextX.endTime,
-                    nextLabel,
-                ));
-            }
+        const nextX = findNextNode(data.data.xSchedules.nodes);
+        if (nextX?.xMatchSetting) {
+            nextEmbeds.push(createXMatchEmbed(
+                nextX.xMatchSetting,
+                nextX.startTime,
+                nextX.endTime,
+                nextLabel,
+            ));
         }
 
         // サーモンラン（次回）
-        if (showSalmon) {
-            const nextCoop = findNextNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
-            if (nextCoop) {
-                nextEmbeds.push(createSalmonRunEmbed(nextCoop, nextLabel));
-            }
+        const nextCoop = findNextNode(data.data.coopGroupingSchedule.regularSchedules.nodes);
+        if (nextCoop) {
+            nextEmbeds.push(createSalmonRunEmbed(nextCoop, nextLabel));
         }
 
         // Embedが1つも生成できなかった場合
