@@ -110,7 +110,7 @@ export async function sendSetupScheduleResponse(interactionData) {
 
     const embed = new EmbedBuilder()
         .setTitle('📅 スプラトゥーン3 スケジュール確認')
-        .setDescription('下のボタンを押すと、**あなただけに**スケジュールの詳細が表示されます！\n（チャンネルを汚さずにいつでも最新情報を確認できます）')
+        .setDescription('下のボタンを押すとスケジュールの詳細が表示されます！\n（チャンネルを汚さずにいつでも最新情報を確認できます）')
         .setColor(0x10b981)
         .toJSON();
 
