@@ -1,6 +1,6 @@
 {
   "name": "splatoon-role-bot",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "スプラトゥーン向けDiscordロール管理Bot - ボタンでロールをトグル＆スケジュール表示",
   "main": "src/index.js",
   "type": "module",

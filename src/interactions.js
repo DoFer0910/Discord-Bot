@@ -5,31 +5,6 @@
 
 import { findRoleById } from './roles.js';
 
-// ユーザーごとのインタラクション履歴を管理
-const userReplies = new Map();
-
-/**
- * 送信したメッセージの履歴を保存し、5件を超える場合は古いものを削除
- * @param {string} userId - ユーザーID
- * @param {ButtonInteraction} interaction - インタラクション
- */
-async function trackAndLimitReplies(userId, interaction) {
-    if (!userReplies.has(userId)) {
-        userReplies.set(userId, []);
-    }
-    const replies = userReplies.get(userId);
-    replies.push(interaction);
-
-    if (replies.length > 5) {
-        const oldestInteraction = replies.shift();
-        try {
-            await oldestInteraction.deleteReply();
-        } catch (error) {
-            console.error('古いメッセージの削除に失敗しました (15分経過等):', error);
-        }
-    }
-}
-
 /**
  * サーバーにロールが存在するか確認し、なければ作成
  * @param {Guild} guild - Discord サーバー
@@ -74,7 +49,7 @@ export async function handleRoleButton(interaction) {
         return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferUpdate();
 
     try {
         const guild = interaction.guild;
@@ -87,23 +62,17 @@ export async function handleRoleButton(interaction) {
         if (member.roles.cache.has(role.id)) {
             // ロール解除
             await member.roles.remove(role);
-            await interaction.editReply({
-                content: `${roleDef.emoji} **${roleDef.label}** ロールを外しました。`,
-            });
         } else {
             // ロール付与
             await member.roles.add(role);
-            await interaction.editReply({
-                content: `${roleDef.emoji} **${roleDef.label}** ロールを付けました！`,
-            });
         }
 
-        // 表示件数を最新5件に制限
-        await trackAndLimitReplies(interaction.user.id, interaction);
+
     } catch (error) {
         console.error('ロール操作エラー:', error);
-        await interaction.editReply({
+        await interaction.followUp({
             content: '❌ ロールの操作に失敗しました。Botの権限を確認してください。',
+            ephemeral: true,
         });
     }
 }
