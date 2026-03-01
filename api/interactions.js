@@ -58,29 +58,18 @@ export default async function handler(req, res) {
             const { name } = body.data;
 
             if (name === 'setup_roles') {
-                res.status(200).json({
-                    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-                    data: { flags: 64 },
-                });
-                await sendSetupRolesResponse(body);
-                return;
+                const response = await sendSetupRolesResponse(body);
+                return res.status(200).json(response);
             }
 
             if (name === 'schedule') {
-                res.status(200).json({
-                    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-                });
-                await fetchAndSendSchedule(body);
-                return;
+                const response = await fetchAndSendSchedule(body);
+                return res.status(200).json(response);
             }
 
             if (name === 'setup_schedule') {
-                res.status(200).json({
-                    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-                    data: { flags: 64 },
-                });
-                await sendSetupScheduleResponse(body);
-                return;
+                const response = await sendSetupScheduleResponse(body);
+                return res.status(200).json(response);
             }
         }
 
@@ -90,19 +79,15 @@ export default async function handler(req, res) {
 
             // スケジュールパネルのボタン
             if (customId && customId.startsWith('schedule_')) {
-                res.status(200).json({
-                    type: InteractionResponseType.DEFERRED_MESSAGE_UPDATE,
-                });
-                await handleScheduleButton(body, customId);
-                return;
+                const response = await handleScheduleButton(body, customId);
+                return res.status(200).json(response);
             }
 
             // ロールパネルのボタン
-            res.status(200).json({
-                type: InteractionResponseType.DEFERRED_MESSAGE_UPDATE,
-            });
-            await handleRoleButton(body);
-            return;
+            if (customId && customId.startsWith('role_')) {
+                const response = await handleRoleButton(body);
+                return res.status(200).json(response);
+            }
         }
 
         return res.status(400).json({ error: 'Unknown interaction type' });

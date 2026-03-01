@@ -62,7 +62,7 @@ function createModeEmbed() {
  * @param {Object} interactionData - Webhook からの interaction body
  */
 export async function sendSetupRolesResponse(interactionData) {
-    const { application_id, token, channel_id } = interactionData;
+    const { channel_id } = interactionData;
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
     try {
@@ -79,22 +79,24 @@ export async function sendSetupRolesResponse(interactionData) {
         await rest.post(Routes.channelMessages(channel_id), { body: weaponPayload });
         await rest.post(Routes.channelMessages(channel_id), { body: modePayload });
 
-        // 元のインタラクションの Deferred に成功メッセージを上書き
-        await rest.patch(Routes.webhookMessage(application_id, token), {
-            body: {
+        // 元のインタラクションの Deferred に成功メッセージを上書きするのではなく、直接返却する
+        return {
+            type: 4,
+            data: {
                 content: '✅ ロール選択パネルを設置しました！',
                 flags: 64, // Ephemeral
             }
-        });
+        };
 
     } catch (error) {
         console.error('Setup roles panel sending error:', error);
-        await rest.patch(Routes.webhookMessage(application_id, token), {
-            body: {
+        return {
+            type: 4,
+            data: {
                 content: '❌ パネル送信に失敗しました。',
                 flags: 64,
             }
-        }).catch(console.error);
+        };
     }
 }
 
@@ -103,7 +105,7 @@ export async function sendSetupRolesResponse(interactionData) {
  * @param {Object} interactionData
  */
 export async function sendSetupScheduleResponse(interactionData) {
-    const { application_id, token, channel_id } = interactionData;
+    const { channel_id } = interactionData;
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
     const embed = new EmbedBuilder()
@@ -135,19 +137,21 @@ export async function sendSetupScheduleResponse(interactionData) {
             }
         });
 
-        await rest.patch(Routes.webhookMessage(application_id, token), {
-            body: {
+        return {
+            type: 4,
+            data: {
                 content: '✅ スケジュール確認パネルを設置しました！\n（※このメッセージは見やすくするためにピン留めしておくことをおすすめします）',
                 flags: 64,
             }
-        });
+        };
     } catch (error) {
         console.error('Setup schedule panel sending error:', error);
-        await rest.patch(Routes.webhookMessage(application_id, token), {
-            body: {
+        return {
+            type: 4,
+            data: {
                 content: '❌ パネルの設置に失敗しました。',
                 flags: 64,
             }
-        }).catch(console.error);
+        };
     }
 }
