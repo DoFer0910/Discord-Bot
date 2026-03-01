@@ -1,8 +1,7 @@
-# 🎮 Splatoon Role Bot
+# 🎮 Splatoon Role Bot (Serverless Edition)
 
 スプラトゥーン向け Discord ロール管理Bot。  
-メンバーがボタンを押すだけでロール（役職）を付け外しできます。  
-さらに、スプラトゥーン3のスケジュール情報を自動＆手動で確認できます。
+Vercel サーバーレス関数（Interactions Webhook）として動作し、常時稼働サーバー不要で24時間運用が可能です。メンバーがボタンを押すだけでロール（役職）を付け外しでき、スプラトゥーン3のスケジュール情報を自動＆手動で確認できます。
 
 ## 機能
 
@@ -12,37 +11,26 @@
 - **トグル形式**: ボタンを押すとロール付与、もう一度押すとロール解除
 - **シームレストグル**: ボタン操作時にメッセージ通知を行わず、スピーディーに切り替え
 - **自動ロール作成**: サーバーにロールが存在しない場合は自動作成
-- **管理者限定**: パネル設置は管理者のみ実行可能
+- **管理者限定**: パネル設置(`/setup_roles`)は管理者のみ実行可能
 
 ### スケジュール表示
-- **`/schedule` コマンド**: 現在と次回のスケジュールをEmbed形式で表示
-  - ナワバリバトル
-  - バンカラマッチ（チャレンジ / オープン）
-  - Xマッチ
-  - サーモンラン（ステージ＆支給ブキ）
-- **日本語表示**: 武器名・ステージ名・ルール名をすべて日本語で表示（splatoon3.ink ロケールAPI使用）
-- **見やすい表示**: 現在と次回のスケジュールを別メッセージに分割して表示
-- **自動送信**: JST 1:01, 3:01, 5:01, ..., 23:01 に指定チャンネルへ自動送信
-- **前回削除**: 自動送信時に前回のメッセージを削除し、最新のみ表示
-- **起動時送信**: Bot起動時に即座にスケジュールを1回送信
+- **`/schedule` コマンド**: 現在と次回のスケジュールをEmbedで表示（ナワバリ、バンカラ、Xマッチ、サーモンラン）
+- **日本語表示**: 武器名・ステージ名・ルール名を日本語で表示（splatoon3.ink ロケールAPI使用）
+- **自動送信 (Vercel Cron)**: 奇数時の1分（例: 1:01, 3:01...）に指定チャンネルへスケジュールを定時送信します。
 
-### その他
-- **自動再読み込み（ホットリロード）**: ソースコード変更時に自動再起動
-
-## セットアップ
+## セットアップ手順
 
 ### 1. Discord Developer Portal での準備
 
 1. [Discord Developer Portal](https://discord.com/developers/applications) でアプリケーションを作成
 2. **Bot** タブで Bot を追加し、トークンをコピー
-3. **Bot** タブで以下の Privileged Gateway Intents を有効化:
-   - `SERVER MEMBERS INTENT`
+3. **General Information** タブから **Public Key** と **Application ID** をコピー
 4. **OAuth2** → **URL Generator** で以下を選択:
    - **Scopes**: `bot`, `applications.commands`
    - **Bot Permissions**: `Manage Roles`, `Send Messages`, `Use Slash Commands`
 5. 生成された URL でサーバーに Bot を招待
 
-### 2. Bot のインストール
+### 2. プロジェクトの準備とデプロイ
 
 ```bash
 # リポジトリをクローン
@@ -51,60 +39,66 @@ cd Discord-Bot
 
 # 依存パッケージをインストール
 npm install
-
-# .env ファイルを作成
-cp .env.example .env
 ```
 
-### 3. 環境変数の設定
+#### Vercel へのデプロイ
+本プロジェクトは Vercel にデプロイしてWebhookとして動かします。
 
-`.env` ファイルを編集して、以下の値を設定:
+1. [Vercel](https://vercel.com/) にログインし、GitHub等からこのリポジトリをインポートします。
+2. デプロイ時の **Environment Variables (環境変数)** に以下を設定します:
+   - `DISCORD_TOKEN`: Botのトークン
+   - `CLIENT_ID`: アプリケーションID
+   - `DISCORD_PUBLIC_KEY`: General InformationにあるPublic Key（署名検証に必須）
+   - `SCHEDULE_CHANNEL_ID`: スケジュールを自動送信したいチャンネルID
+   - `CRON_SECRET`: Vercel Cron実行用の任意のシークレット文字列（例: `my_secret_cron_key`）
+3. デプロイを実行し、発行されたドメイン（例: `https://your-bot.vercel.app`）をメモします。
 
-```env
-DISCORD_TOKEN=ここにBotトークンを貼り付け
-CLIENT_ID=ここにアプリケーションIDを貼り付け
-SCHEDULE_CHANNEL_ID=スケジュール自動送信先のチャンネルID
-```
+### 3. Interactions Endpoint URL の設定
 
-> **注意**: `SCHEDULE_CHANNEL_ID` を設定しない場合、自動送信は無効になります（`/schedule` コマンドは使用可能）。
+1. Discord Developer Portal の **General Information** に戻ります。
+2. **Interactions Endpoint URL** に以下を入力して保存します。
+   `https://[あなたのVercelドメイン]/api/interactions`
+3. 保存が成功すれば、DiscordからBotへの疎通確認完了です。
 
-### 4. Bot の起動
+### 4. スラッシュコマンドの登録
+
+自分のPC上で1回だけコマンド登録スクリプトを実行します。
+（`.env` ファイルを作成し、`DISCORD_TOKEN` と `CLIENT_ID` を記載しておいてください）
 
 ```bash
-npm start
+npm run register_commands
 ```
+
+これで Discord サーバー上で `/setup_roles` や `/schedule` が使えるようになります。
 
 ## 使い方
 
-### ロール管理
-1. Bot が起動したら、ロールパネルを設置したいチャンネルで `/setup_roles` コマンドを実行
-2. 武器種とモードの2つのパネルが表示されます
-3. メンバーはボタンを押してロールを取得／解除できます
+- **ロールパネルの設置**:
+  Bot を招待したサーバーのチャンネルで管理者が `/setup_roles` を実行します。パネルが設置され、ボタンからロールを取得できます。
+  **注意**: Botのロール（役職）が、付与するロールより上の位置にある必要があります。サーバー設定からBotのロール位置を上に移動してください。
 
-### スケジュール確認
-- `/schedule` コマンドを実行すると、現在と次回のスケジュールがEmbed形式で表示されます
-- `SCHEDULE_CHANNEL_ID` を設定すると、2時間ごとに自動でスケジュールが送信されます
-- 自動送信時、前回のメッセージは自動的に削除されます
+- **スケジュールの手動確認**:
+  任意のチャンネルで `/schedule` を実行します。
 
-> **注意**: Botのロールが、付与するロールより上の位置にある必要があります。  
-> サーバー設定 → ロールで、Bot のロールを上に移動してください。
+- **スケジュールの自動送信**:
+  Vercel Cron により、2時間おきに自動送信が行われます。
 
 ## プロジェクト構造
 
 ```
+├── api/
+│   ├── interactions.js     # Discord Webhook エンドポイント (Vercel Serverless Function)
+│   └── cron.js             # スケジュール自動送信エンドポイント (Vercel Cron)
 ├── src/
-│   ├── index.js            # メインエントリーポイント
+│   ├── index.js            # スラッシュコマンド登録スクリプト
 │   ├── roles.js            # ロール定義データ
-│   ├── panels.js           # パネル生成
-│   ├── interactions.js     # ボタン処理
-│   ├── schedule.js         # スケジュール取得・Embed生成（日本語ロケール対応）
-│   └── autoSchedule.js     # スケジュール自動送信タイマー（削除対応）
-├── .env.example            # 環境変数テンプレート
-├── .gitignore
+│   ├── panels.js           # パネル生成ロジック
+│   ├── interactions.js     # ボタン処理ロジック
+│   └── schedule.js         # スケジュール取得・Embed生成
+├── vercel.json             # Vercel Cron の設定ファイル
 ├── package.json
 └── README.md
 ```
 
 ## ライセンス
-
 ISC

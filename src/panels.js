@@ -1,9 +1,11 @@
 /**
  * ロール選択パネル生成モジュール
- * カテゴリ別のEmbed + ボタンを生成してチャンネルに送信
+ * カテゴリ別のEmbed + ボタンを生成してWebhookを通じてチャンネルに送信
  */
 
 import {
+    REST,
+    Routes,
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
@@ -13,7 +15,6 @@ import { WEAPON_ROLES, MODE_ROLES } from './roles.js';
 
 /**
  * ボタン行を生成する（5個ずつの行に分割）
- * Discord の制限: 1行に最大5つのボタン
  * @param {Array} roles - ロール定義の配列
  * @returns {ActionRowBuilder[]} ボタン行の配列
  */
@@ -36,10 +37,6 @@ function createButtonRows(roles) {
     return rows;
 }
 
-/**
- * 武器種パネルのEmbedを生成
- * @returns {EmbedBuilder} 武器種用Embed
- */
 function createWeaponEmbed() {
     return new EmbedBuilder()
         .setTitle('🎮 武器種ロール')
@@ -50,10 +47,6 @@ function createWeaponEmbed() {
         .setColor(0x7c3aed);
 }
 
-/**
- * モードパネルのEmbedを生成
- * @returns {EmbedBuilder} モード用Embed
- */
 function createModeEmbed() {
     return new EmbedBuilder()
         .setTitle('🏆 やりたいモード')
@@ -65,19 +58,42 @@ function createModeEmbed() {
 }
 
 /**
- * ロール選択パネルをチャンネルに送信
- * @param {TextChannel} channel - 送信先チャンネル
+ * /setup_roles コマンドに対するパネル設置・応答処理
+ * @param {Object} interactionData - Webhook からの interaction body
  */
-export async function sendRolePanels(channel) {
-    // 武器種パネル送信
-    await channel.send({
-        embeds: [createWeaponEmbed()],
-        components: createButtonRows(WEAPON_ROLES),
-    });
+export async function sendSetupRolesResponse(interactionData) {
+    const { application_id, token, channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-    // モードパネル送信
-    await channel.send({
-        embeds: [createModeEmbed()],
-        components: createButtonRows(MODE_ROLES),
-    });
+    try {
+        const weaponPayload = {
+            embeds: [createWeaponEmbed().toJSON()],
+            components: createButtonRows(WEAPON_ROLES).map(row => row.toJSON()),
+        };
+        const modePayload = {
+            embeds: [createModeEmbed().toJSON()],
+            components: createButtonRows(MODE_ROLES).map(row => row.toJSON()),
+        };
+
+        // チャンネルに2つのパネルを送信
+        await rest.post(Routes.channelMessages(channel_id), { body: weaponPayload });
+        await rest.post(Routes.channelMessages(channel_id), { body: modePayload });
+
+        // 元のインタラクションの Deferred に成功メッセージを上書き
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: {
+                content: '✅ ロール選択パネルを設置しました！',
+                flags: 64, // Ephemeral
+            }
+        });
+
+    } catch (error) {
+        console.error('Setup roles panel sending error:', error);
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: {
+                content: '❌ パネル送信に失敗しました。',
+                flags: 64,
+            }
+        }).catch(console.error);
+    }
 }

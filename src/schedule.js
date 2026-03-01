@@ -4,7 +4,7 @@
  * 日本語ロケールAPI を使用して武器名・ステージ名を日本語化
  */
 
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, REST, Routes } from 'discord.js';
 
 // スケジュールAPI エンドポイント
 const SCHEDULE_API_URL = 'https://splatoon3.ink/data/schedules.json';
@@ -369,5 +369,46 @@ export async function fetchScheduleEmbeds() {
     } catch (error) {
         console.error('スケジュール取得エラー:', error);
         return { error: 'スケジュールの取得に失敗しました。時間をおいて再度お試しください。' };
+    }
+}
+
+/**
+ * /schedule コマンド応答: Webhookでスケジュール情報を取得して送信
+ * @param {Object} interactionData
+ */
+export async function fetchAndSendSchedule(interactionData) {
+    const { application_id, token } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    const result = await fetchScheduleEmbeds();
+    if (result.error) {
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: { content: `❌ ${result.error}` }
+        }).catch(console.error);
+        return;
+    }
+
+    // 元の応答メッセージを更新して現在のスケジュールを表示
+    if (result.currentEmbeds.length > 0) {
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: {
+                content: '📅 **＝＝＝ 現在のスケジュール ＝＝＝**',
+                embeds: result.currentEmbeds.map(e => e.toJSON()),
+            }
+        }).catch(console.error);
+    } else {
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: { content: '現在のスケジュールがありません。' }
+        }).catch(console.error);
+    }
+
+    // 次回のスケジュールを別メッセージで送信
+    if (result.nextEmbeds.length > 0) {
+        await rest.post(Routes.webhook(application_id, token), {
+            body: {
+                content: '📅 **＝＝＝ 次回のスケジュール ＝＝＝**',
+                embeds: result.nextEmbeds.map(e => e.toJSON()),
+            }
+        }).catch(console.error);
     }
 }

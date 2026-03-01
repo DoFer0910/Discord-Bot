@@ -3,23 +3,28 @@
  * ロールのトグル（付与/解除）を実行
  */
 
+import { REST, Routes } from 'discord.js';
 import { findRoleById } from './roles.js';
 
 /**
- * サーバーにロールが存在するか確認し、なければ作成
- * @param {Guild} guild - Discord サーバー
+ * サーバーにロールが存在するか確認し、なければ作成（REST APIベース）
+ * @param {REST} rest - discord.js RESTインスタンス
+ * @param {string} guildId - サーバーID
  * @param {object} roleDef - ロール定義オブジェクト
- * @returns {Role} Discord ロール
+ * @returns {object} Discord ロールオブジェクト
  */
-async function ensureRole(guild, roleDef) {
-    // 既存ロールを名前で検索
-    let role = guild.roles.cache.find(r => r.name === roleDef.label);
+async function ensureRole(rest, guildId, roleDef) {
+    // 既存ロールを取得
+    const roles = await rest.get(Routes.guildRoles(guildId));
+    let role = roles.find(r => r.name === roleDef.label);
 
     // なければ新規作成
     if (!role) {
-        role = await guild.roles.create({
-            name: roleDef.label,
-            color: roleDef.color,
+        role = await rest.post(Routes.guildRoles(guildId), {
+            body: {
+                name: roleDef.label,
+                color: roleDef.color,
+            },
             reason: `ロールパネルから自動作成: ${roleDef.label}`,
         });
     }
@@ -28,51 +33,50 @@ async function ensureRole(guild, roleDef) {
 }
 
 /**
- * ボタンインタラクションを処理
- * ロールのトグル（持っていれば解除、持っていなければ付与）
- * @param {ButtonInteraction} interaction - ボタンインタラクション
+ * ボタンインタラクション（Webhookペイロード）を処理
+ * @param {Object} interactionData - Webhook payload
  */
-export async function handleRoleButton(interaction) {
-    // カスタムIDからロールIDを抽出（形式: role_{id}）
-    const customId = interaction.customId;
-    if (!customId.startsWith('role_')) return;
+export async function handleRoleButton(interactionData) {
+    const { application_id, token, guild_id, member, data } = interactionData;
+    const customId = data.custom_id;
+    if (!customId || !customId.startsWith('role_')) return;
 
     const roleId = customId.replace('role_', '');
     const roleDef = findRoleById(roleId);
 
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
     // 定義に存在しないロールIDの場合は無視
     if (!roleDef) {
-        await interaction.reply({
-            content: '❌ 不明なロールです。',
-            ephemeral: true,
-        });
+        await rest.post(Routes.webhook(application_id, token), {
+            body: { content: '❌ 不明なロールです。', flags: 64 }
+        }).catch(console.error);
         return;
     }
 
-    await interaction.deferUpdate();
-
     try {
-        const guild = interaction.guild;
-        const member = interaction.member;
-
         // ロールの存在を確認・作成
-        const role = await ensureRole(guild, roleDef);
+        const discordRole = await ensureRole(rest, guild_id, roleDef);
 
         // トグル処理
-        if (member.roles.cache.has(role.id)) {
+        const hasRole = member.roles.includes(discordRole.id);
+        const userId = member.user.id;
+
+        if (hasRole) {
             // ロール解除
-            await member.roles.remove(role);
+            await rest.delete(Routes.guildMemberRole(guild_id, userId, discordRole.id), {
+                reason: 'Button toggled (remove)'
+            });
         } else {
             // ロール付与
-            await member.roles.add(role);
+            await rest.put(Routes.guildMemberRole(guild_id, userId, discordRole.id), {
+                reason: 'Button toggled (add)'
+            });
         }
-
-
     } catch (error) {
         console.error('ロール操作エラー:', error);
-        await interaction.followUp({
-            content: '❌ ロールの操作に失敗しました。Botの権限を確認してください。',
-            ephemeral: true,
-        });
+        await rest.post(Routes.webhook(application_id, token), {
+            body: { content: '❌ ロールの操作に失敗しました。Botの権限を確認してください。', flags: 64 }
+        }).catch(console.error);
     }
 }
