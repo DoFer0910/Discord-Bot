@@ -3,8 +3,8 @@
  * splatoon3.ink API からデータを取得し、Discord Embed に整形する
  * 日本語ロケールAPI を使用して武器名・ステージ名を日本語化
  */
-
 import { EmbedBuilder, REST, Routes } from 'discord.js';
+import { deletePreviousInteractionMessage, saveCurrentInteractionToken } from './interactionCache.js';
 
 // スケジュールAPI エンドポイント
 const SCHEDULE_API_URL = 'https://splatoon3.ink/data/schedules.json';
@@ -405,6 +405,13 @@ export async function fetchAndSendSchedule(interactionData) {
  * @param {string} customId - 'schedule_current' または 'schedule_next'
  */
 export async function handleScheduleButton(interactionData, customId) {
+    const userId = interactionData.member.user.id;
+    const token = interactionData.token;
+
+    // 前回のインタラクションメッセージを削除し、新しいトークンを記録
+    await deletePreviousInteractionMessage(userId);
+    saveCurrentInteractionToken(userId, token);
+
     const result = await fetchScheduleEmbeds();
     if (result.error) {
         return {

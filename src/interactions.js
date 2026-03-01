@@ -5,6 +5,7 @@
 
 import { REST, Routes } from 'discord.js';
 import { findRoleById } from './roles.js';
+import { deletePreviousInteractionMessage, saveCurrentInteractionToken } from './interactionCache.js';
 
 /**
  * サーバーにロールが存在するか確認し、なければ作成（REST APIベース）
@@ -37,9 +38,15 @@ async function ensureRole(rest, guildId, roleDef) {
  * @param {Object} interactionData - Webhook payload
  */
 export async function handleRoleButton(interactionData) {
-    const { guild_id, member, data } = interactionData;
+    const { guild_id, member, data, token } = interactionData;
     const customId = data.custom_id;
     if (!customId || !customId.startsWith('role_')) return;
+
+    const userId = member.user.id;
+
+    // 前回のインタラクションメッセージを削除し、新しいトークンを記録
+    await deletePreviousInteractionMessage(userId);
+    saveCurrentInteractionToken(userId, token);
 
     const roleId = customId.replace('role_', '');
     const roleDef = findRoleById(roleId);
@@ -60,7 +67,6 @@ export async function handleRoleButton(interactionData) {
 
         // トグル処理
         const hasRole = member.roles.includes(discordRole.id);
-        const userId = member.user.id;
 
         if (hasRole) {
             // ロール解除
