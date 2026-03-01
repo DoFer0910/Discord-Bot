@@ -1,11 +1,11 @@
 {
   "name": "splatoon-role-bot",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "スプラトゥーン向けDiscordロール管理Bot - ボタンでロールをトグル",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node --watch src/index.js"
   },
   "keywords": [
     "discord",
