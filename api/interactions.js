@@ -10,11 +10,11 @@ export const config = {
 };
 
 async function getRawBody(req) {
-    let rawBody = '';
+    const chunks = [];
     for await (const chunk of req) {
-        rawBody += chunk;
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
     }
-    return rawBody;
+    return Buffer.concat(chunks).toString('utf8');
 }
 
 export default async function handler(req, res) {
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
+    const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY?.trim();
     if (!PUBLIC_KEY) {
         console.error('DISCORD_PUBLIC_KEY is missing in env');
         return res.status(500).json({ error: 'DISCORD_PUBLIC_KEY is missing in env' });
