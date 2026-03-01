@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     try {
         const rawBody = await getRawBody(req);
 
-        const isValidRequest = verifyKey(rawBody, signature, timestamp, PUBLIC_KEY);
+        const isValidRequest = await verifyKey(rawBody, signature, timestamp, PUBLIC_KEY);
         if (!isValidRequest) {
             console.error('Bad request signature');
             return res.status(401).json({ error: 'Bad request signature' });
