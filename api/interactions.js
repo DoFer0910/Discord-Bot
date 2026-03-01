@@ -24,6 +24,7 @@ export default async function handler(req, res) {
 
     const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
     if (!PUBLIC_KEY) {
+        console.error('DISCORD_PUBLIC_KEY is missing in env');
         return res.status(500).json({ error: 'DISCORD_PUBLIC_KEY is missing in env' });
     }
 
@@ -31,57 +32,63 @@ export default async function handler(req, res) {
     const timestamp = req.headers['x-signature-timestamp'];
 
     if (!signature || !timestamp) {
+        console.error('Missing signature or timestamp', { signature, timestamp });
         return res.status(401).json({ error: 'Missing signature' });
     }
 
-    const rawBody = await getRawBody(req);
+    try {
+        const rawBody = await getRawBody(req);
 
-    const isValidRequest = verifyKey(rawBody, signature, timestamp, PUBLIC_KEY);
-    if (!isValidRequest) {
-        return res.status(401).json({ error: 'Bad request signature' });
-    }
+        const isValidRequest = verifyKey(rawBody, signature, timestamp, PUBLIC_KEY);
+        if (!isValidRequest) {
+            console.error('Bad request signature');
+            return res.status(401).json({ error: 'Bad request signature' });
+        }
 
-    const body = JSON.parse(rawBody);
+        const body = JSON.parse(rawBody);
 
-    // Ping
-    if (body.type === InteractionType.PING) {
-        return res.status(200).json({ type: InteractionResponseType.PONG });
-    }
+        // Ping
+        if (body.type === InteractionType.PING) {
+            console.log('Received PING, sending PONG');
+            return res.status(200).json({ type: InteractionResponseType.PONG });
+        }
 
-    // Slash Commands
-    if (body.type === InteractionType.APPLICATION_COMMAND) {
-        const { name } = body.data;
+        // Slash Commands
+        if (body.type === InteractionType.APPLICATION_COMMAND) {
+            const { name } = body.data;
 
-        if (name === 'setup_roles') {
-            // パネル送信は非同期でWebhookトークンを使って行うため一旦保留(Deferred)レスポンス
+            if (name === 'setup_roles') {
+                res.status(200).json({
+                    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: { flags: 64 },
+                });
+                await sendSetupRolesResponse(body);
+                return;
+            }
+
+            if (name === 'schedule') {
+                res.status(200).json({
+                    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+                });
+                await fetchAndSendSchedule(body);
+                return;
+            }
+        }
+
+        // Button interactions
+        if (body.type === InteractionType.MESSAGE_COMPONENT) {
             res.status(200).json({
-                type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { flags: 64 }, // 他のユーザーには見えないようにする (ephemeral)
+                type: InteractionResponseType.DEFERRED_MESSAGE_UPDATE,
             });
-            await sendSetupRolesResponse(body);
+
+            await handleRoleButton(body);
             return;
         }
 
-        if (name === 'schedule') {
-            // まずはDeferredを返す
-            res.status(200).json({
-                type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-            });
-            await fetchAndSendSchedule(body);
-            return;
-        }
+        return res.status(400).json({ error: 'Unknown interaction type' });
+
+    } catch (err) {
+        console.error('Error processing webhook:', err);
+        return res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    // Button interactions
-    if (body.type === InteractionType.MESSAGE_COMPONENT) {
-        // ボタン操作に対する即時のDeferred Update
-        res.status(200).json({
-            type: InteractionResponseType.DEFERRED_MESSAGE_UPDATE,
-        });
-
-        await handleRoleButton(body);
-        return;
-    }
-
-    return res.status(400).json({ error: 'Unknown interaction type' });
 }
