@@ -1,7 +1,7 @@
 import { verifyKey, InteractionType, InteractionResponseType } from 'discord-interactions';
 import { handleRoleButton } from '../src/interactions.js';
-import { fetchAndSendSchedule } from '../src/schedule.js';
-import { sendSetupRolesResponse } from '../src/panels.js';
+import { sendSetupRolesResponse, sendSetupScheduleResponse } from '../src/panels.js';
+import { handleScheduleButton, fetchAndSendSchedule } from '../src/schedule.js';
 
 export const config = {
     api: {
@@ -73,14 +73,34 @@ export default async function handler(req, res) {
                 await fetchAndSendSchedule(body);
                 return;
             }
+
+            if (name === 'setup_schedule') {
+                res.status(200).json({
+                    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: { flags: 64 },
+                });
+                await sendSetupScheduleResponse(body);
+                return;
+            }
         }
 
         // Button interactions
         if (body.type === InteractionType.MESSAGE_COMPONENT) {
+            const customId = body.data.custom_id;
+
+            // スケジュールパネルのボタン
+            if (customId && customId.startsWith('schedule_')) {
+                res.status(200).json({
+                    type: InteractionResponseType.DEFERRED_MESSAGE_UPDATE,
+                });
+                await handleScheduleButton(body, customId);
+                return;
+            }
+
+            // ロールパネルのボタン
             res.status(200).json({
                 type: InteractionResponseType.DEFERRED_MESSAGE_UPDATE,
             });
-
             await handleRoleButton(body);
             return;
         }

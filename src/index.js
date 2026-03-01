@@ -25,6 +25,11 @@ const commands = [
         .setName('schedule')
         .setDescription('現在と次回のスプラトゥーン3スケジュールを表示します')
         .toJSON(),
+    new SlashCommandBuilder()
+        .setName('setup_schedule')
+        .setDescription('スケジュールの常設確認パネルをこのチャンネルに設置します（管理者用）')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
 ];
 
 // コマンド登録の実行

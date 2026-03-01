@@ -97,3 +97,57 @@ export async function sendSetupRolesResponse(interactionData) {
         }).catch(console.error);
     }
 }
+
+/**
+ * /setup_schedule コマンド用: スケジュール確認常設パネルを設置
+ * @param {Object} interactionData
+ */
+export async function sendSetupScheduleResponse(interactionData) {
+    const { application_id, token, channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    const embed = new EmbedBuilder()
+        .setTitle('📅 スプラトゥーン3 スケジュール確認')
+        .setDescription('下のボタンを押すと、**あなただけに**スケジュールの詳細が表示されます！\n（チャンネルを汚さずにいつでも最新情報を確認できます）')
+        .setColor(0x10b981)
+        .toJSON();
+
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('schedule_current')
+                .setLabel('現在のスケジュール')
+                .setEmoji('🟢')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('schedule_next')
+                .setLabel('次回のスケジュール')
+                .setEmoji('⏭️')
+                .setStyle(ButtonStyle.Secondary)
+        )
+        .toJSON();
+
+    try {
+        await rest.post(Routes.channelMessages(channel_id), {
+            body: {
+                embeds: [embed],
+                components: [row],
+            }
+        });
+
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: {
+                content: '✅ スケジュール確認パネルを設置しました！\n（※このメッセージは見やすくするためにピン留めしておくことをおすすめします）',
+                flags: 64,
+            }
+        });
+    } catch (error) {
+        console.error('Setup schedule panel sending error:', error);
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: {
+                content: '❌ パネルの設置に失敗しました。',
+                flags: 64,
+            }
+        }).catch(console.error);
+    }
+}

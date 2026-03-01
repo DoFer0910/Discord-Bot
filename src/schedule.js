@@ -412,3 +412,38 @@ export async function fetchAndSendSchedule(interactionData) {
         }).catch(console.error);
     }
 }
+
+/**
+ * スケジュールパネルのボタンが押された時の処理
+ * @param {Object} interactionData
+ * @param {string} customId - 'schedule_current' または 'schedule_next'
+ */
+export async function handleScheduleButton(interactionData, customId) {
+    const { application_id, token } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    const result = await fetchScheduleEmbeds();
+    if (result.error) {
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: { content: `❌ ${result.error}` }
+        }).catch(console.error);
+        return;
+    }
+
+    const isCurrent = customId === 'schedule_current';
+    const targets = isCurrent ? result.currentEmbeds : result.nextEmbeds;
+    const label = isCurrent ? '現在' : '次回';
+
+    if (targets.length > 0) {
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: {
+                content: `📅 **＝＝＝ ${label}のスケジュール ＝＝＝**`,
+                embeds: targets.map(e => e.toJSON()),
+            }
+        }).catch(console.error);
+    } else {
+        await rest.patch(Routes.webhookMessage(application_id, token), {
+            body: { content: `${label}のスケジュールが見つかりません。` }
+        }).catch(console.error);
+    }
+}
