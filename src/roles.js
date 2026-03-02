@@ -5,29 +5,38 @@
 
 // 武器種カテゴリ
 export const WEAPON_ROLES = [
-  { id: 'shooter',    label: 'シューター',     emoji: '🔫', color: 0x4ade80 },
-  { id: 'roller',     label: 'ローラー',       emoji: '🎨', color: 0xfbbf24 },
-  { id: 'charger',    label: 'チャージャー',   emoji: '🎯', color: 0x60a5fa },
-  { id: 'slosher',    label: 'スロッシャー',   emoji: '🪣', color: 0xa78bfa },
-  { id: 'spinner',    label: 'スピナー',       emoji: '🌀', color: 0xf472b6 },
-  { id: 'maneuver',   label: 'マニューバー',   emoji: '🔄', color: 0x34d399 },
-  { id: 'shelter',    label: 'シェルター',     emoji: '🛡️', color: 0xfb923c },
-  { id: 'blaster',    label: 'ブラスター',     emoji: '💥', color: 0xf87171 },
-  { id: 'brush',      label: 'フデ',           emoji: '🖌️', color: 0x818cf8 },
-  { id: 'stringer',   label: 'ストリンガー',   emoji: '🏹', color: 0x2dd4bf },
-  { id: 'wiper',      label: 'ワイパー',       emoji: '⚔️', color: 0xe879f9 },
+  { id: 'shooter', label: 'シューター', emoji: '🔫', color: 0x4ade80 },
+  { id: 'roller', label: 'ローラー', emoji: '🎨', color: 0xfbbf24 },
+  { id: 'charger', label: 'チャージャー', emoji: '🎯', color: 0x60a5fa },
+  { id: 'slosher', label: 'スロッシャー', emoji: '🪣', color: 0xa78bfa },
+  { id: 'spinner', label: 'スピナー', emoji: '🌀', color: 0xf472b6 },
+  { id: 'maneuver', label: 'マニューバー', emoji: '🔄', color: 0x34d399 },
+  { id: 'shelter', label: 'シェルター', emoji: '🛡️', color: 0xfb923c },
+  { id: 'blaster', label: 'ブラスター', emoji: '💥', color: 0xf87171 },
+  { id: 'brush', label: 'フデ', emoji: '🖌️', color: 0x818cf8 },
+  { id: 'stringer', label: 'ストリンガー', emoji: '🏹', color: 0x2dd4bf },
+  { id: 'wiper', label: 'ワイパー', emoji: '⚔️', color: 0xe879f9 },
 ];
 
 // やりたいモードカテゴリ
 export const MODE_ROLES = [
-  { id: 'bankara',    label: 'バンカラマッチ', emoji: '⚡', color: 0xff6b2b },
-  { id: 'xmatch',     label: 'Xマッチ',       emoji: '✨', color: 0x00d1ff },
-  { id: 'salmonrun',  label: 'サーモンラン',   emoji: '🐟', color: 0xff8c00 },
+  { id: 'bankara', label: 'バンカラマッチ', emoji: '⚡', color: 0xff6b2b },
+  { id: 'xmatch', label: 'Xマッチ', emoji: '✨', color: 0x00d1ff },
+  { id: 'salmonrun', label: 'サーモンラン', emoji: '🐟', color: 0xff8c00 },
+];
+
+// ウデマエ（ランク）カテゴリ
+export const RANK_ROLES = [
+  { id: 'rank_x', label: 'X', emoji: '👑', color: 0xfacc15 },
+  { id: 'rank_s', label: 'S', emoji: '🌟', color: 0xf97316 },
+  { id: 'rank_a', label: 'A', emoji: '🔴', color: 0xef4444 },
+  { id: 'rank_b', label: 'B', emoji: '🟢', color: 0x22c55e },
+  { id: 'rank_c', label: 'C', emoji: '🔵', color: 0x3b82f6 },
 ];
 
 // 全ロール定義を統合して取得
 export function getAllRoles() {
-  return [...WEAPON_ROLES, ...MODE_ROLES];
+  return [...WEAPON_ROLES, ...MODE_ROLES, ...RANK_ROLES];
 }
 
 // IDからロール定義を検索

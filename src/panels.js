@@ -11,7 +11,7 @@ import {
     ButtonBuilder,
     ButtonStyle,
 } from 'discord.js';
-import { WEAPON_ROLES, MODE_ROLES } from './roles.js';
+import { WEAPON_ROLES, MODE_ROLES, RANK_ROLES } from './roles.js';
 
 /**
  * ボタン行を生成する（5個ずつの行に分割）
@@ -57,6 +57,16 @@ function createModeEmbed() {
         .setColor(0x0ea5e9);
 }
 
+function createRankEmbed() {
+    return new EmbedBuilder()
+        .setTitle('🏅 ウデマエ (ランク)')
+        .setDescription(
+            '現在の連携や合流の目安として、自分のウデマエのボタンを押してロールを取得しましょう！\n' +
+            'もう一度押すとロールが外れます。'
+        )
+        .setColor(0xf59e0b);
+}
+
 /**
  * /setup_roles コマンドに対するパネル設置・応答処理
  * @param {Object} interactionData - Webhook からの interaction body
@@ -74,10 +84,15 @@ export async function sendSetupRolesResponse(interactionData) {
             embeds: [createModeEmbed().toJSON()],
             components: createButtonRows(MODE_ROLES).map(row => row.toJSON()),
         };
+        const rankPayload = {
+            embeds: [createRankEmbed().toJSON()],
+            components: createButtonRows(RANK_ROLES).map(row => row.toJSON()),
+        };
 
-        // チャンネルに2つのパネルを送信
+        // チャンネルに3つのパネルを送信
         await rest.post(Routes.channelMessages(channel_id), { body: weaponPayload });
         await rest.post(Routes.channelMessages(channel_id), { body: modePayload });
+        await rest.post(Routes.channelMessages(channel_id), { body: rankPayload });
 
         // 元のインタラクションの Deferred に成功メッセージを上書きするのではなく、直接返却する
         return {
