@@ -4,7 +4,7 @@
  * 日本語ロケールAPI を使用して武器名・ステージ名を日本語化
  */
 import { EmbedBuilder, REST, Routes } from 'discord.js';
-import { deletePreviousInteractionMessage, saveCurrentInteractionToken } from './interactionCache.js';
+import { deleteOldBotMessages } from './interactionCache.js';
 
 // スケジュールAPI エンドポイント
 const SCHEDULE_API_URL = 'https://splatoon3.ink/data/schedules.json';
@@ -405,18 +405,16 @@ export async function fetchAndSendSchedule(interactionData) {
  * @param {string} customId - 'schedule_current' または 'schedule_next'
  */
 export async function handleScheduleButton(interactionData, customId) {
-    const userId = interactionData.member.user.id;
-    const token = interactionData.token;
+    const channelId = interactionData.channel_id;
 
-    // 前回のインタラクションメッセージを削除し、新しいトークンを記録
-    await deletePreviousInteractionMessage(userId);
-    saveCurrentInteractionToken(userId, token);
+    // 前回のスケジュールメッセージ等、Botが送信した過去の非パネルメッセージをすべて削除
+    await deleteOldBotMessages(channelId);
 
     const result = await fetchScheduleEmbeds();
     if (result.error) {
         return {
             type: 4,
-            data: { content: `❌ ${result.error}`, flags: 64 }
+            data: { content: `❌ ${result.error}` } // flags: 64 を除去
         };
     }
 
@@ -430,13 +428,13 @@ export async function handleScheduleButton(interactionData, customId) {
             data: {
                 content: `📅 **＝＝＝ ${label}のスケジュール ＝＝＝**`,
                 embeds: targets.map(e => e.toJSON()),
-                flags: 64, // Ephemeral
+                // flags: 64 (Ephemeral) の指定を削除し、通常の表示にする
             }
         };
     } else {
         return {
             type: 4,
-            data: { content: `${label}のスケジュールが見つかりません。`, flags: 64 }
+            data: { content: `${label}のスケジュールが見つかりません。` } // flags: 64 を除去
         };
     }
 }

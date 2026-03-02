@@ -1,17 +1,10 @@
 import { REST, Routes } from 'discord.js';
 
-// ユーザーIDをキー、過去のインタラクショントークンを値とするメモリキャッシュ
-// Vercel環境ではコールドスタート時にリセットされますが、連続クリックによるスパム防止目的には十分に機能します。
-const userInteractionTokens = new Map();
-
 /**
- * ユーザーの過去のインタラクションメッセージ(Original)を削除する
- * @param {string} userId - DiscordユーザーID
+ * チャンネルの履歴から、Botが過去に送信した「パネル以外のメッセージ」を探して削除する処理。
+ * @param {string} channelId - DiscordチャンネルID
  */
-export async function deletePreviousInteractionMessage(userId) {
-    const oldToken = userInteractionTokens.get(userId);
-    if (!oldToken) return;
-
+export async function deleteOldBotMessages(channelId) {
     const clientId = process.env.CLIENT_ID;
     if (!clientId) {
         console.error('CLIENT_ID が環境変数に設定されていないため、古いメッセージの削除をスキップします。');
@@ -20,24 +13,27 @@ export async function deletePreviousInteractionMessage(userId) {
 
     try {
         const rest = new REST({ defaultVersion: '10' }).setToken(process.env.DISCORD_TOKEN);
-        // 古いインタラクションの元のメッセージを削除
-        await rest.delete(Routes.webhookMessage(clientId, oldToken, '@original'));
-    } catch (error) {
-        // メッセージがすでにない、期限切れ等（Unknown Message エラー等）の場合は無視する
-        // デバッグログがうるさくなりすぎるのを防ぐため出力は最小限に
-        if (error.code !== 10008) {
-            console.log(`過去のメッセージ削除中にエラー: ${error.message}`);
-        }
-    }
-}
 
-/**
- * 今回のインタラクショントークンを記録する
- * @param {string} userId - DiscordユーザーID
- * @param {string} token - インタラクショントークン
- */
-export function saveCurrentInteractionToken(userId, token) {
-    if (userId && token) {
-        userInteractionTokens.set(userId, token);
+        // チャンネルの最新メッセージを20件取得
+        const messages = await rest.get(Routes.channelMessages(channelId), {
+            query: new URLSearchParams({ limit: '20' })
+        });
+
+        // 自分（Bot）が送信したメッセージを抽出
+        const botMessages = messages.filter(msg => msg.author.id === clientId);
+
+        for (const msg of botMessages) {
+            // パネル用メッセージ（componentsが含まれているもの）は削除対象外とする
+            // 逆にcomponentsが空、もしくは存在しない場合は削除対象
+            if (!msg.components || msg.components.length === 0) {
+                try {
+                    await rest.delete(Routes.channelMessage(channelId, msg.id));
+                } catch (delError) {
+                    console.error(`メッセージ ${msg.id} の削除に失敗しました:`, delError.message);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('過去のメッセージ検索・削除中にエラーが発生しました:', error.message);
     }
 }

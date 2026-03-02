@@ -5,7 +5,6 @@
 
 import { REST, Routes } from 'discord.js';
 import { findRoleById } from './roles.js';
-import { deletePreviousInteractionMessage, saveCurrentInteractionToken } from './interactionCache.js';
 
 /**
  * サーバーにロールが存在するか確認し、なければ作成（REST APIベース）
@@ -38,16 +37,11 @@ async function ensureRole(rest, guildId, roleDef) {
  * @param {Object} interactionData - Webhook payload
  */
 export async function handleRoleButton(interactionData) {
-    const { guild_id, member, data, token } = interactionData;
+    const { guild_id, member, data } = interactionData;
     const customId = data.custom_id;
     if (!customId || !customId.startsWith('role_')) return;
 
     const userId = member.user.id;
-
-    // 前回のインタラクションメッセージを削除し、新しいトークンを記録
-    await deletePreviousInteractionMessage(userId);
-    saveCurrentInteractionToken(userId, token);
-
     const roleId = customId.replace('role_', '');
     const roleDef = findRoleById(roleId);
 
@@ -56,8 +50,7 @@ export async function handleRoleButton(interactionData) {
     // 定義に存在しないロールIDの場合は無視
     if (!roleDef) {
         return {
-            type: 4, // InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE
-            data: { content: '❌ 不明なロールです。', flags: 64 }
+            type: 6 // InteractionResponseType.DEFERRED_UPDATE_MESSAGE
         };
     }
 
@@ -73,25 +66,18 @@ export async function handleRoleButton(interactionData) {
             await rest.delete(Routes.guildMemberRole(guild_id, userId, discordRole.id), {
                 reason: 'Button toggled (remove)'
             });
-            return {
-                type: 4,
-                data: { content: `✅ <@&${discordRole.id}> ロールを解除しました。`, flags: 64 }
-            };
         } else {
             // ロール付与
             await rest.put(Routes.guildMemberRole(guild_id, userId, discordRole.id), {
                 reason: 'Button toggled (add)'
             });
-            return {
-                type: 4,
-                data: { content: `✅ <@&${discordRole.id}> ロールを付与しました。`, flags: 64 }
-            };
         }
     } catch (error) {
         console.error('ロール操作エラー:', error);
-        return {
-            type: 4,
-            data: { content: '❌ ロールの操作に失敗しました。Botの権限を確認してください。', flags: 64 }
-        };
     }
+
+    // 常にメッセージを送信せず、インタラクションを正常終了させるために DEFERRED_UPDATE_MESSAGE を返す
+    return {
+        type: 6
+    };
 }
