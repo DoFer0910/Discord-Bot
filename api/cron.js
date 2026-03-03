@@ -25,11 +25,21 @@ export default async function handler(req, res) {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
     try {
-        const today = new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        // スケジュールチャンネルの既存メッセージをすべて取得して削除
+        const messages = await rest.get(Routes.channelMessages(channelId));
+        if (Array.isArray(messages)) {
+            for (const msg of messages) {
+                try {
+                    await rest.delete(Routes.channelMessage(channelId, msg.id));
+                } catch (delErr) {
+                    console.error(`Failed to delete message ${msg.id}:`, delErr);
+                }
+            }
+        }
 
         const embed = new EmbedBuilder()
-            .setTitle(`📅 今日のスプラトゥーン3 スケジュール (${today})`)
-            .setDescription('おはようございます！下のボタンを押すと、**あなただけに**今日のスケジュールの詳細が表示されます！\n')
+            .setTitle('📅 スプラトゥーン3 スケジュール確認')
+            .setDescription('下のボタンを押すとスケジュールの詳細が表示されます！\n（チャンネルを汚さずにいつでも最新情報を確認できます）')
             .setColor(0x10b981)
             .toJSON();
 
@@ -50,7 +60,6 @@ export default async function handler(req, res) {
 
         await rest.post(Routes.channelMessages(channelId), {
             body: {
-                content: `🌅 **本日のスケジュールチェック**`,
                 embeds: [embed],
                 components: [row],
             }
