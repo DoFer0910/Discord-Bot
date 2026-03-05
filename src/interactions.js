@@ -81,3 +81,27 @@ export async function handleRoleButton(interactionData) {
         type: 6
     };
 }
+
+/**
+ * 募集ボタンが押されたときの処理
+ * @param {Object} interactionData - Webhook payload
+ */
+export async function handleRecruitButton(interactionData) {
+    const { channel_id, member } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    try {
+        await rest.post(Routes.channelMessages(channel_id), {
+            body: {
+                content: `@everyone ${member?.user?.username || 'メンバー'} さんが募集を開始しました！🎮`
+            }
+        });
+    } catch (error) {
+        console.error('募集メッセージ送信エラー:', error);
+    }
+
+    // パネルはそのまま残すため、DEFERRED_UPDATE_MESSAGE を返す
+    return {
+        type: 6
+    };
+}

@@ -1,6 +1,6 @@
 import { verifyKey, InteractionType, InteractionResponseType } from 'discord-interactions';
-import { handleRoleButton } from '../src/interactions.js';
-import { sendSetupRolesResponse, sendSetupScheduleResponse } from '../src/panels.js';
+import { handleRoleButton, handleRecruitButton } from '../src/interactions.js';
+import { sendSetupRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse } from '../src/panels.js';
 import { handleScheduleButton, fetchAndSendSchedule } from '../src/schedule.js';
 
 export const config = {
@@ -71,6 +71,11 @@ export default async function handler(req, res) {
                 const response = await sendSetupScheduleResponse(body);
                 return res.status(200).json(response);
             }
+
+            if (name === 'setup_recruit') {
+                const response = await sendSetupRecruitResponse(body);
+                return res.status(200).json(response);
+            }
         }
 
         // Button interactions
@@ -86,6 +91,12 @@ export default async function handler(req, res) {
             // ロールパネルのボタン
             if (customId && customId.startsWith('role_')) {
                 const response = await handleRoleButton(body);
+                return res.status(200).json(response);
+            }
+
+            // 募集パネルのボタン
+            if (customId === 'recruit_everyone') {
+                const response = await handleRecruitButton(body);
                 return res.status(200).json(response);
             }
         }

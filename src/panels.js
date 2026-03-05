@@ -170,3 +170,54 @@ export async function sendSetupScheduleResponse(interactionData) {
         };
     }
 }
+
+/**
+ * /setup_recruit コマンド用: 募集パネルを設置
+ * @param {Object} interactionData
+ */
+export async function sendSetupRecruitResponse(interactionData) {
+    const { channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎮 メンバー募集')
+        .setDescription('下のボタンを押すと「@everyone」でメンバーを募集します！\n（通知が飛ぶので注意してください）')
+        .setColor(0xec4899)
+        .toJSON();
+
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('recruit_everyone')
+                .setLabel('募集する！')
+                .setEmoji('📢')
+                .setStyle(ButtonStyle.Primary)
+        )
+        .toJSON();
+
+    try {
+        await rest.post(Routes.channelMessages(channel_id), {
+            body: {
+                embeds: [embed],
+                components: [row],
+            }
+        });
+
+        return {
+            type: 4,
+            data: {
+                content: '✅ 募集用パネルを設置しました！',
+                flags: 64,
+            }
+        };
+    } catch (error) {
+        console.error('Setup recruit panel sending error:', error);
+        return {
+            type: 4,
+            data: {
+                content: '❌ パネルの設置に失敗しました。',
+                flags: 64,
+            }
+        };
+    }
+}
