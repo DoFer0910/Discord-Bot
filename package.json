@@ -1,6 +1,6 @@
 {
   "name": "splatoon-role-bot",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "スプラトゥーン向けDiscordロール管理Bot - Vercel Serverless対応",
   "main": "src/index.js",
   "type": "module",
