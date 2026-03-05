@@ -91,9 +91,10 @@ export async function handleRecruitButton(interactionData) {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
     try {
+        const displayName = member?.nick || member?.user?.global_name || member?.user?.username || 'メンバー';
         await rest.post(Routes.channelMessages(channel_id), {
             body: {
-                content: `@everyone ${member?.user?.username || 'メンバー'} さんが募集を開始しました！🎮`
+                content: `@everyone ${displayName} さんが募集を開始しました！🎮`
             }
         });
     } catch (error) {
