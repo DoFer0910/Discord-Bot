@@ -95,16 +95,22 @@ export async function handleRecruitButton(interactionData) {
     try {
         const displayName = member?.nick || member?.user?.global_name || member?.user?.username || 'メンバー';
 
-        // 1. 新しいメッセージ（募集通知＋パネル）を一番下に配置
+        // 1. 募集メッセージ（ログとして残るテキスト）を送信
         await rest.post(Routes.channelMessages(channel_id), {
             body: {
-                content: `@everyone ${displayName} さんが募集を開始しました！🎮`,
+                content: `@everyone ${displayName} さんが募集を開始しました！🎮`
+            }
+        });
+
+        // 2. 新しい募集パネルを一番下に配置
+        await rest.post(Routes.channelMessages(channel_id), {
+            body: {
                 embeds: [createRecruitEmbed()],
                 components: [createRecruitRow()],
             }
         });
 
-        // 2. 元のメッセージ（古いパネル）を削除してログをスッキリさせる
+        // 3. 元のメッセージ（古いパネルのみ）を削除してスッキリさせる
         if (message && message.id) {
             await rest.delete(Routes.channelMessage(channel_id, message.id)).catch(e => console.error('Original message delete error:', e));
         }
