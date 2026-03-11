@@ -171,21 +171,16 @@ export async function sendSetupScheduleResponse(interactionData) {
     }
 }
 
-/**
- * /setup_recruit コマンド用: 募集パネルを設置
- * @param {Object} interactionData
- */
-export async function sendSetupRecruitResponse(interactionData) {
-    const { channel_id } = interactionData;
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-    const embed = new EmbedBuilder()
+export function createRecruitEmbed() {
+    return new EmbedBuilder()
         .setTitle('🎮 メンバー募集')
         .setDescription('下のボタンを押すと「@everyone」でメンバーを募集します！\n（通知が飛ぶので注意してください）')
         .setColor(0xec4899)
         .toJSON();
+}
 
-    const row = new ActionRowBuilder()
+export function createRecruitRow() {
+    return new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId('recruit_everyone')
@@ -194,12 +189,21 @@ export async function sendSetupRecruitResponse(interactionData) {
                 .setStyle(ButtonStyle.Primary)
         )
         .toJSON();
+}
+
+/**
+ * /setup_recruit コマンド用: 募集パネルを設置
+ * @param {Object} interactionData
+ */
+export async function sendSetupRecruitResponse(interactionData) {
+    const { channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
     try {
         await rest.post(Routes.channelMessages(channel_id), {
             body: {
-                embeds: [embed],
-                components: [row],
+                embeds: [createRecruitEmbed()],
+                components: [createRecruitRow()],
             }
         });
 

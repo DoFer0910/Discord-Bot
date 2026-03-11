@@ -6,6 +6,7 @@
 import { REST, Routes, EmbedBuilder } from 'discord.js';
 import { findRoleById } from './roles.js';
 import { deleteOldBotMessages } from './interactionCache.js';
+import { createRecruitEmbed, createRecruitRow } from './panels.js';
 
 /**
  * サーバーにロールが存在するか確認し、なければ作成（REST APIベース）
@@ -88,21 +89,32 @@ export async function handleRoleButton(interactionData) {
  * @param {Object} interactionData - Webhook payload
  */
 export async function handleRecruitButton(interactionData) {
-    const { channel_id, member } = interactionData;
+    const { channel_id, member, message } = interactionData;
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
     try {
         const displayName = member?.nick || member?.user?.global_name || member?.user?.username || 'メンバー';
+
+        // 1. 新しいメッセージ（募集通知＋パネル）を一番下に配置
         await rest.post(Routes.channelMessages(channel_id), {
             body: {
-                content: `@everyone ${displayName} さんが募集を開始しました！🎮`
+                content: `@everyone ${displayName} さんが募集を開始しました！🎮`,
+                embeds: [createRecruitEmbed()],
+                components: [createRecruitRow()],
             }
         });
+
+        // 2. 元のメッセージ（古いパネル）を削除してログをスッキリさせる
+        if (message && message.id) {
+            await rest.delete(Routes.channelMessage(channel_id, message.id)).catch(e => console.error('Original message delete error:', e));
+        }
+
     } catch (error) {
         console.error('募集メッセージ送信エラー:', error);
     }
 
-    // パネルはそのまま残すため、DEFERRED_UPDATE_MESSAGE を返す
+    // パネルは削除されたが、念のためDEFERRED_UPDATE_MESSAGEを返す
+    // （Discord側に「処理完了」を伝えるため。メッセージが存在しなくてもACKとして機能する）
     return {
         type: 6
     };
