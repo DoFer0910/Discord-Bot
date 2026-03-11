@@ -1,6 +1,6 @@
 import { verifyKey, InteractionType, InteractionResponseType } from 'discord-interactions';
-import { handleRoleButton, handleRecruitButton } from '../src/interactions.js';
-import { sendSetupRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse } from '../src/panels.js';
+import { handleRoleButton, handleRecruitButton, handleHelpButton } from '../src/interactions.js';
+import { sendSetupRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse, sendSetupHelpResponse } from '../src/panels.js';
 import { handleScheduleButton, fetchAndSendSchedule } from '../src/schedule.js';
 
 export const config = {
@@ -76,6 +76,11 @@ export default async function handler(req, res) {
                 const response = await sendSetupRecruitResponse(body);
                 return res.status(200).json(response);
             }
+
+            if (name === 'setup_help') {
+                const response = await sendSetupHelpResponse(body);
+                return res.status(200).json(response);
+            }
         }
 
         // Button interactions
@@ -97,6 +102,12 @@ export default async function handler(req, res) {
             // 募集パネルのボタン
             if (customId === 'recruit_everyone') {
                 const response = await handleRecruitButton(body);
+                return res.status(200).json(response);
+            }
+
+            // 使い方パネルのボタン
+            if (customId === 'show_help') {
+                const response = await handleHelpButton(body);
                 return res.status(200).json(response);
             }
         }

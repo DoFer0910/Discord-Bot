@@ -35,6 +35,11 @@ const commands = [
         .setDescription('募集用のパネルをこのチャンネルに設置します（管理者用）')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON(),
+    new SlashCommandBuilder()
+        .setName('setup_help')
+        .setDescription('使い方説明パネルをこのチャンネルに設置します（管理者用）')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
 ];
 
 // コマンド登録の実行

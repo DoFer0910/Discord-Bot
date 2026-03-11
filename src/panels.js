@@ -221,3 +221,54 @@ export async function sendSetupRecruitResponse(interactionData) {
         };
     }
 }
+
+/**
+ * /setup_help コマンド用: 使い方説明パネルを設置
+ * @param {Object} interactionData
+ */
+export async function sendSetupHelpResponse(interactionData) {
+    const { channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    const embed = new EmbedBuilder()
+        .setTitle('ℹ️ ボットの使い方')
+        .setDescription('下のボタンを押すと、このボットの基本的な使い方や機能の説明が表示されます！')
+        .setColor(0x3b82f6)
+        .toJSON();
+
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('show_help')
+                .setLabel('使い方を見る')
+                .setEmoji('📖')
+                .setStyle(ButtonStyle.Primary)
+        )
+        .toJSON();
+
+    try {
+        await rest.post(Routes.channelMessages(channel_id), {
+            body: {
+                embeds: [embed],
+                components: [row],
+            }
+        });
+
+        return {
+            type: 4,
+            data: {
+                content: '✅ 使い方説明用パネルを設置しました！',
+                flags: 64,
+            }
+        };
+    } catch (error) {
+        console.error('Setup help panel sending error:', error);
+        return {
+            type: 4,
+            data: {
+                content: '❌ パネルの設置に失敗しました。',
+                flags: 64,
+            }
+        };
+    }
+}

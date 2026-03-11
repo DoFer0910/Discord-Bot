@@ -3,8 +3,9 @@
  * ロールのトグル（付与/解除）を実行
  */
 
-import { REST, Routes } from 'discord.js';
+import { REST, Routes, EmbedBuilder } from 'discord.js';
 import { findRoleById } from './roles.js';
+import { deleteOldBotMessages } from './interactionCache.js';
 
 /**
  * サーバーにロールが存在するか確認し、なければ作成（REST APIベース）
@@ -102,6 +103,48 @@ export async function handleRecruitButton(interactionData) {
     }
 
     // パネルはそのまま残すため、DEFERRED_UPDATE_MESSAGE を返す
+    return {
+        type: 6
+    };
+}
+
+/**
+ * 使い方ボタンが押されたときの処理
+ * @param {Object} interactionData - Webhook payload
+ */
+export async function handleHelpButton(interactionData) {
+    const { channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    // チャンネル内の過去のBotメッセージ（過去の使い方の説明など）を削除して最新化する
+    await deleteOldBotMessages(channel_id);
+
+    const embed = new EmbedBuilder()
+        .setTitle('ボットの基本的な使い方')
+        .setDescription(
+            'このボットで利用可能な主な機能とコマンドの一覧です：\n\n' +
+            '🔹 **ロールの取得**\n' +
+            '「ロール選択パネル」のボタンを押すことで、武器種やランクなどのロールを自分に付与・解除できます。\n\n' +
+            '🔹 **スケジュールの確認**\n' +
+            '`/schedule` と入力すると直近のスケジュールを確認できます。「スケジュールパネル」を利用すればいつでも確認可能です。\n\n' +
+            '🔹 **メンバーの募集**\n' +
+            '募集用パネルのボタンを押すと `@everyone` 宛てに募集通知を送信します！\n\n' +
+            '※ このメッセージは新しい使い方を開くときに上書き（削除）されます。'
+        )
+        .setColor(0x3b82f6)
+        .toJSON();
+
+    try {
+        await rest.post(Routes.channelMessages(channel_id), {
+            body: {
+                embeds: [embed]
+            }
+        });
+    } catch (error) {
+        console.error('使い方メッセージ送信エラー:', error);
+    }
+
+    // パネル自体はそのまま残してインタラクションを正常完了する
     return {
         type: 6
     };
