@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+  title: Discord REST test surface
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:4010
+paths:
+  /v10/guilds/{guildId}/channels:
+    get:
+      operationId: listGuildChannels
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Guild channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+              example: []
+    post:
+      operationId: createGuildChannel
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Created channel
+          content:
+            application/json:
+              schema: { type: object }
+              example:
+                id: mh-channel
+                name: モンハン募集
+                type: 0
+  /v10/guilds/{guildId}/roles:
+    get:
+      operationId: listGuildRoles
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Guild roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+              example:
+                - id: mh-notification-role
+                  name: モンハン募集通知
+  /v10/channels/{channelId}/messages:
+    get:
+      operationId: listChannelMessages
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Channel messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+              example: []
+    post:
+      operationId: createChannelMessage
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Created message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+              example: { id: hunt-message }
+  /v10/channels/{channelId}/messages/{messageId}:
+    delete:
+      operationId: deleteChannelMessage
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted message
+  /v10/channels/{channelId}/permissions/{overwriteId}:
+    put:
+      operationId: editChannelPermission
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: overwriteId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '204':
+          description: Updated permission overwrite
+  /v10/webhooks/{applicationId}/{token}/messages/@original:
+    patch:
+      operationId: updateOriginalInteraction
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Updated interaction response
+          content:
+            application/json:
+              schema:
+                type: object
+              example: {}

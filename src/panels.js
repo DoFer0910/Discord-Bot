@@ -11,7 +11,15 @@ import {
     ButtonBuilder,
     ButtonStyle,
 } from 'discord.js';
-import { WEAPON_ROLES, MODE_ROLES, RANK_ROLES } from './roles.js';
+import {
+    WEAPON_ROLES,
+    MODE_ROLES,
+    RANK_ROLES,
+    MH_WEAPON_ROLES,
+    MH_RANK_ROLES,
+    MH_PLATFORM_ROLES,
+    MH_NOTIFICATION_ROLE,
+} from './roles.js';
 
 /**
  * ボタン行を生成する（5個ずつの行に分割）
@@ -111,6 +119,61 @@ export async function sendSetupRolesResponse(interactionData) {
                 content: '❌ パネル送信に失敗しました。',
                 flags: 64,
             }
+        };
+    }
+}
+
+function createMhRoleEmbed(title, description, color) {
+    return new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(description)
+        .setColor(color)
+        .toJSON();
+}
+
+/**
+ * /setup_mh_roles 用のモンハンロールパネルを設置する。
+ * 1メッセージあたり最大5行というDiscord制約に合わせ、カテゴリごとに分けて送信する。
+ */
+export async function sendSetupMhRolesResponse(interactionData) {
+    const { channel_id } = interactionData;
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    const panels = [
+        {
+            embed: createMhRoleEmbed('⚔️ モンハン武器種', '使用する武器種を選択してください。もう一度押すとロールが外れます。', 0xdc2626),
+            roles: MH_WEAPON_ROLES,
+        },
+        {
+            embed: createMhRoleEmbed('🏅 モンハンランク', 'プレイするランク帯を選択してください。', 0xf59e0b),
+            roles: MH_RANK_ROLES,
+        },
+        {
+            embed: createMhRoleEmbed('🎮 プラットフォーム', 'プレイするプラットフォームを選択してください。', 0x2563eb),
+            roles: MH_PLATFORM_ROLES,
+        },
+        {
+            embed: createMhRoleEmbed('📢 モンハン募集通知', 'モンハン募集の通知を受け取る場合は選択してください。', 0x7c3aed),
+            roles: [MH_NOTIFICATION_ROLE],
+        },
+    ];
+
+    try {
+        // 4カテゴリを並行送信して、Interactionの3秒応答制限にかかりにくくする。
+        await Promise.all(panels.map(panel => rest.post(Routes.channelMessages(channel_id), {
+                body: {
+                    embeds: [panel.embed],
+                    components: createButtonRows(panel.roles).map(row => row.toJSON()),
+                },
+            })));
+        return {
+            type: 4,
+            data: { content: '✅ モンハン（ワールド／アイスボーン）用ロールパネルを設置しました！', flags: 64 },
+        };
+    } catch (error) {
+        console.error('モンハンロールパネル送信エラー:', error);
+        return {
+            type: 4,
+            data: { content: '❌ モンハン用ロールパネルの設置に失敗しました。', flags: 64 },
         };
     }
 }

@@ -22,6 +22,48 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON(),
     new SlashCommandBuilder()
+        .setName('setup_mh_roles')
+        .setDescription('モンハン（ワールド／アイスボーン）のロールパネルを設置します')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+    new SlashCommandBuilder()
+        .setName('setup_mh_recruit')
+        .setDescription('モンハン募集専用チャンネルと常設パネルを設置します')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+    new SlashCommandBuilder()
+        .setName('hunt')
+        .setDescription('モンハン（ワールド／アイスボーン）のクエスト募集を投稿します')
+        .addStringOption(option => option
+            .setName('target')
+            .setDescription('対象モンスターまたはクエスト名')
+            .setMinLength(1)
+            .setMaxLength(1000)
+            .setRequired(true))
+        .addStringOption(option => option
+            .setName('purpose')
+            .setDescription('募集の目的（素材集め、調査など）')
+            .setMinLength(1)
+            .setMaxLength(1000)
+            .setRequired(true))
+        .addIntegerOption(option => option
+            .setName('slots')
+            .setDescription('募集人数（主催者を除く）')
+            .addChoices(
+                { name: '1人', value: 1 },
+                { name: '2人', value: 2 },
+                { name: '3人', value: 3 },
+            )
+            .setRequired(true))
+        .addBooleanOption(option => option
+            .setName('voice')
+            .setDescription('VCを使用する（未入力はなし）'))
+        .addStringOption(option => option
+            .setName('start_time')
+            .setDescription('開始時刻（未入力は今から。例: 21:00）')
+            .setMaxLength(100))
+        .toJSON(),
+    new SlashCommandBuilder()
         .setName('schedule')
         .setDescription('現在と次回のスプラトゥーン3スケジュールを表示します')
         .toJSON(),
