@@ -276,7 +276,8 @@ export async function handleHelpButton(interactionData) {
             '募集用パネルのボタンを押すと @everyone 宛てに募集通知を送信\n\n' +
             '🔹 **モンハン（ワールド／アイスボーン）**\n' +
             '`/setup_mh_roles` で武器種・ランク・機種・募集通知ロールを設置\n' +
-            '`/hunt` でクエスト募集を作成し、参加・辞退・締切ボタンで管理'
+            '`/setup_mh_recruit` で専用チャンネルと常設募集パネルを設置\n' +
+            '常設パネルから募集を作成し、参加・辞退・締切ボタンで管理'
         )
         .setColor(0x3b82f6)
         .toJSON();

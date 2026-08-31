@@ -3,6 +3,14 @@ import { waitUntil as vercelWaitUntil } from '@vercel/functions';
 import { Routes } from 'discord.js';
 import { handleRoleButton, handleRecruitButton, handleHelpButton, postHuntCommand, validateHuntCommand, createDiscordRest, handleHuntButton } from '../src/interactions.js';
 import { sendSetupRolesResponse, sendSetupMhRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse, sendSetupHelpResponse } from '../src/panels.js';
+import {
+    MH_RECRUIT_OPEN_ID,
+    MH_RECRUIT_MODAL_PREFIX,
+    createMhRecruitModalResponse,
+    modalToHuntInteraction,
+    postMhRecruitFromModal,
+    setupMhRecruitChannel,
+} from '../src/mhRecruit.js';
 import { handleScheduleButton, fetchAndSendSchedule } from '../src/schedule.js';
 
 export const config = {
@@ -52,6 +60,52 @@ export function deferHuntInteraction(interactionData, {
     })();
     scheduleBackground(task, waitUntilImpl);
     return { type: 5, data: { flags: 64 } };
+}
+
+/** 時間のかかる処理をdeferし、完了結果をephemeralな元応答へ反映する。 */
+export function deferResultInteraction(interactionData, work, {
+    waitUntilImpl = vercelWaitUntil,
+    restFactory = createDiscordRest,
+    failureMessage = '❌ 処理に失敗しました。',
+} = {}) {
+    const task = (async () => {
+        let result;
+        try {
+            result = await work(interactionData);
+        } catch (error) {
+            console.error('バックグラウンド処理に失敗しました:', error);
+            result = { ok: false, content: failureMessage };
+        }
+        try {
+            const rest = restFactory();
+            await rest.patch(
+                Routes.webhookMessage(interactionData.application_id, interactionData.token),
+                { body: { content: result.content } },
+            );
+        } catch (error) {
+            console.error('バックグラウンド処理の結果更新に失敗しました:', error);
+        }
+    })();
+    scheduleBackground(task, waitUntilImpl);
+    return { type: 5, data: { flags: 64 } };
+}
+
+export function deferMhRecruitSetupInteraction(interactionData, dependencies = {}) {
+    return deferResultInteraction(interactionData, setupMhRecruitChannel, {
+        ...dependencies,
+        failureMessage: '❌ モンハン募集チャンネルの設置に失敗しました。',
+    });
+}
+
+export function deferMhRecruitModalInteraction(interactionData, dependencies = {}) {
+    const validation = modalToHuntInteraction(interactionData);
+    if (validation.error) {
+        return { type: 4, data: { content: validation.error, flags: 64 } };
+    }
+    return deferResultInteraction(interactionData, postMhRecruitFromModal, {
+        ...dependencies,
+        failureMessage: '❌ モンハン募集の投稿に失敗しました。',
+    });
 }
 
 export default async function handler(req, res) {
@@ -104,6 +158,11 @@ export default async function handler(req, res) {
                 return res.status(200).json(response);
             }
 
+            if (name === 'setup_mh_recruit') {
+                const response = deferMhRecruitSetupInteraction(body);
+                return res.status(200).json(response);
+            }
+
             if (name === 'hunt') {
                 const response = deferHuntInteraction(body);
                 return res.status(200).json(response);
@@ -152,6 +211,11 @@ export default async function handler(req, res) {
                 return res.status(200).json(response);
             }
 
+            if (customId === MH_RECRUIT_OPEN_ID) {
+                const response = createMhRecruitModalResponse(body);
+                return res.status(200).json(response);
+            }
+
             // モンハン募集の参加・辞退・締切ボタン
             if (customId && customId.startsWith('mh_hunt_')) {
                 const response = await handleHuntButton(body);
@@ -161,6 +225,14 @@ export default async function handler(req, res) {
             // 使い方パネルのボタン
             if (customId === 'show_help') {
                 const response = await handleHelpButton(body);
+                return res.status(200).json(response);
+            }
+        }
+
+        if (body.type === InteractionType.MODAL_SUBMIT) {
+            const customId = body.data?.custom_id;
+            if (customId && customId.startsWith(MH_RECRUIT_MODAL_PREFIX)) {
+                const response = deferMhRecruitModalInteraction(body);
                 return res.status(200).json(response);
             }
         }

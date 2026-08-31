@@ -16,6 +16,15 @@ import {
   serializeHuntState,
 } from '../src/mh.js';
 import { createHuntAllowedMentions } from '../src/interactions.js';
+import {
+  MH_RECRUIT_CHANNEL_NAME,
+  MH_RECRUIT_OPEN_ID,
+  createMhRecruitModalResponse,
+  createMhRecruitPanelPayload,
+  createMhRecruitPermissionOverwrites,
+  findMhRecruitChannel,
+  modalToHuntInteraction,
+} from '../src/mhRecruit.js';
 
 test('モンハン用ロールは14武器種・3ランク・3機種・通知ロールでIDが衝突しない', () => {
   assert.equal(MH_WEAPON_ROLES.length, 14);
@@ -93,4 +102,58 @@ test('募集通知のallowed_mentionsは通知ロールだけを許可し、ロ�
     roles: ['role-1'], users: [], replied_user: false,
   });
   assert.deepEqual(createHuntAllowedMentions(null), { parse: [], replied_user: false });
+});
+
+test('モンハン募集チャンネルは重複判定と専用権限を持つ', () => {
+  const existing = { id: 'channel-1', name: MH_RECRUIT_CHANNEL_NAME, type: 0 };
+  assert.equal(findMhRecruitChannel([{ id: 'other', name: '雑談', type: 0 }, existing]), existing);
+  assert.equal(findMhRecruitChannel([{ id: 'voice', name: MH_RECRUIT_CHANNEL_NAME, type: 2 }]), null);
+  const overwrites = createMhRecruitPermissionOverwrites('guild-1', 'bot-1');
+  assert.equal(overwrites.length, 2);
+  assert.equal(overwrites[0].id, 'guild-1');
+  assert.notEqual(overwrites[0].deny, '0', 'メンバーの通常メッセージ送信を禁止する');
+  assert.equal(overwrites[1].id, 'bot-1');
+  assert.notEqual(overwrites[1].allow, '0', 'Botにパネル投稿権限を付与する');
+});
+
+test('常設パネルからモーダルを開き、入力を/hunt形式へ変換できる', () => {
+  const panel = createMhRecruitPanelPayload();
+  assert.equal(panel.components[0].components[0].custom_id, MH_RECRUIT_OPEN_ID);
+  const modal = createMhRecruitModalResponse({ message: { id: 'panel-1' } });
+  assert.equal(modal.type, 9);
+  assert.equal(modal.data.components.length, 5);
+
+  const parsed = modalToHuntInteraction({
+    guild_id: 'guild-1',
+    channel_id: 'channel-1',
+    member: { user: { id: 'owner-1', username: 'Owner' } },
+    data: {
+      custom_id: 'mh_recruit_modal:panel-1',
+      components: [
+        { components: [{ custom_id: 'target', value: 'アルバトリオン' }] },
+        { components: [{ custom_id: 'purpose', value: '素材集め' }] },
+        { components: [{ custom_id: 'slots', value: '２' }] },
+        { components: [{ custom_id: 'voice', value: 'なし' }] },
+        { components: [{ custom_id: 'start_time', value: '' }] },
+      ],
+    },
+  });
+  assert.equal(parsed.error, undefined);
+  assert.equal(parsed.oldPanelMessageId, 'panel-1');
+  const options = Object.fromEntries(parsed.huntInteraction.data.options.map(option => [option.name, option.value]));
+  assert.equal(options.slots, 2);
+  assert.equal(options.voice, false);
+  assert.equal(options.start_time, '今から');
+
+  const invalid = modalToHuntInteraction({
+    ...parsed.huntInteraction,
+    data: {
+      custom_id: 'mh_recruit_modal:panel-1',
+      components: [
+        { components: [{ custom_id: 'slots', value: '4' }] },
+        { components: [{ custom_id: 'voice', value: '未定' }] },
+      ],
+    },
+  });
+  assert.match(invalid.error, /1〜3/);
 });

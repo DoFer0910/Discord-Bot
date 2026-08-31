@@ -27,6 +27,11 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON(),
     new SlashCommandBuilder()
+        .setName('setup_mh_recruit')
+        .setDescription('モンハン募集専用チャンネルと常設パネルを設置します')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+    new SlashCommandBuilder()
         .setName('hunt')
         .setDescription('モンハン（ワールド／アイスボーン）のクエスト募集を投稿します')
         .addStringOption(option => option
