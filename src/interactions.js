@@ -4,9 +4,17 @@
  */
 
 import { REST, Routes, EmbedBuilder } from 'discord.js';
-import { findRoleById } from './roles.js';
+import { findRoleById, MH_NOTIFICATION_ROLE } from './roles.js';
+import { HUNT_BUTTON_IDS, applyHuntAction, createHuntPayload, createHuntState, getHuntStateFromMessage } from './mh.js';
 import { deleteOldBotMessages } from './interactionCache.js';
 import { createRecruitEmbed, createRecruitRow } from './panels.js';
+
+/** Discord RESTの向き先を環境変数で差し替えられる薄い境界。Prism E2Eでも利用する。 */
+export function createDiscordRest() {
+    const options = { version: '10' };
+    if (process.env.DISCORD_API_BASE) options.api = process.env.DISCORD_API_BASE;
+    return new REST(options).setToken(process.env.DISCORD_TOKEN || 'test-token');
+}
 
 /**
  * サーバーにロールが存在するか確認し、なければ作成（REST APIベース）
@@ -22,11 +30,13 @@ async function ensureRole(rest, guildId, roleDef) {
 
     // なければ新規作成
     if (!role) {
+        const body = {
+            name: roleDef.label,
+            color: roleDef.color,
+        };
+        if (roleDef.mentionable !== undefined) body.mentionable = roleDef.mentionable;
         role = await rest.post(Routes.guildRoles(guildId), {
-            body: {
-                name: roleDef.label,
-                color: roleDef.color,
-            },
+            body,
             reason: `ロールパネルから自動作成: ${roleDef.label}`,
         });
     }
@@ -126,13 +136,130 @@ export async function handleRecruitButton(interactionData) {
     };
 }
 
+function interactionOptions(interactionData) {
+    return Object.fromEntries((interactionData.data?.options || []).map(option => [option.name, option.value]));
+}
+
+function memberDisplayName(member, user) {
+    return member?.nick || member?.user?.global_name || member?.user?.username || user?.global_name || user?.username || 'メンバー';
+}
+
+export function createHuntAllowedMentions(notificationRole) {
+    return notificationRole
+        ? { roles: [notificationRole.id], users: [], replied_user: false }
+        : { parse: [], replied_user: false };
+}
+
+/** モンハン募集通知ロールを検索する。見つからなくても募集投稿は継続する。 */
+async function findMhNotificationRole(rest, guildId) {
+    try {
+        const roles = await rest.get(Routes.guildRoles(guildId));
+        return roles.find(role => role.name === MH_NOTIFICATION_ROLE.label) || null;
+    } catch (error) {
+        console.error('モンハン募集通知ロールの取得に失敗しました（通知なしで続行）:', error);
+        return null;
+    }
+}
+
+/** /hunt の入力を検証し、背景処理へ渡す状態を作る（RESTを呼ばない）。 */
+export function validateHuntCommand(interactionData) {
+    const options = interactionOptions(interactionData);
+    const member = interactionData.member;
+    const user = interactionData.user;
+    const ownerId = member?.user?.id || user?.id;
+    const ownerName = memberDisplayName(member, user);
+    try {
+        return {
+            state: createHuntState({
+                ownerId,
+                ownerName,
+                target: options.target,
+                purpose: options.purpose,
+                maxSlots: options.slots,
+                voice: options.voice,
+                startAt: options.start_time,
+            }),
+        };
+    } catch (error) {
+        return { error: '❌ 対象・目的・募集人数を確認してください。' };
+    }
+}
+
+/**
+ * /hunt のDiscord REST処理。api層からwaitUntilへ渡されるため、初回応答を待たせない。
+ * 戻り値はinteractionの元メッセージをPATCHするための表示文だけに限定する。
+ */
+export async function postHuntCommand(interactionData) {
+    const { channel_id: channelId, guild_id: guildId, member, user } = interactionData;
+    const ownerName = memberDisplayName(member, user);
+    const validation = validateHuntCommand(interactionData);
+    if (validation.error) return { ok: false, content: validation.error };
+    const rest = createDiscordRest();
+
+    try {
+        const notificationRole = guildId ? await findMhNotificationRole(rest, guildId) : null;
+        if (!notificationRole) {
+            console.error('モンハン募集通知ロールが見つからないため、通知なしで募集を投稿します。');
+        }
+        const content = notificationRole
+            ? `<@&${notificationRole.id}> 🎮 ${ownerName} さんがモンハン募集を開始しました！`
+            : `🎮 ${ownerName} さんがモンハン募集を開始しました！（通知ロール未設定）`;
+        const body = createHuntPayload(validation.state, content);
+        body.allowed_mentions = createHuntAllowedMentions(notificationRole);
+        await rest.post(Routes.channelMessages(channelId), { body });
+        return {
+            ok: true,
+            content: notificationRole
+                ? '✅ モンハン募集を投稿しました！'
+                : '✅ モンハン募集を投稿しました！（通知ロール未設定のため通知なし）',
+        };
+    } catch (error) {
+        console.error('モンハン募集メッセージ送信エラー:', error);
+        return { ok: false, content: '❌ モンハン募集の投稿に失敗しました。' };
+    }
+}
+
+/** 後方互換の同期ハンドラ。通常のWebhook経路ではapi層がpostHuntCommandをwaitUntilで呼ぶ。 */
+export async function handleHuntCommand(interactionData) {
+    const result = await postHuntCommand(interactionData);
+    return { type: 4, data: { content: result.content, flags: 64 } };
+}
+
+/** モンハン募集メッセージの参加・辞退・締切ボタンを処理する。 */
+export async function handleHuntButton(interactionData) {
+    const customId = interactionData.data?.custom_id;
+    const actionByButton = {
+        [HUNT_BUTTON_IDS.join]: 'join',
+        [HUNT_BUTTON_IDS.leave]: 'leave',
+        [HUNT_BUTTON_IDS.close]: 'close',
+    };
+    const action = actionByButton[customId];
+    if (!action) return { type: 6 };
+
+    const state = getHuntStateFromMessage(interactionData.message);
+    if (!state) {
+        return { type: 4, data: { content: '❌ この募集の状態を復元できません。募集主に新しく投稿してもらってください。', flags: 64 } };
+    }
+
+    const member = interactionData.member;
+    const user = member?.user || interactionData.user;
+    const result = applyHuntAction(state, action, {
+        id: user?.id,
+        name: memberDisplayName(member, interactionData.user),
+    });
+    if (result.error) {
+        return { type: 4, data: { content: `❌ ${result.error}`, flags: 64 } };
+    }
+    return { type: 7, data: createHuntPayload(result.state) };
+}
+
 /**
  * 使い方ボタンが押されたときの処理
  * @param {Object} interactionData - Webhook payload
  */
 export async function handleHelpButton(interactionData) {
     const { channel_id } = interactionData;
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    const rest = createDiscordRest();
 
     // チャンネル内の過去のBotメッセージ（過去の使い方の説明など）を削除して最新化する
     await deleteOldBotMessages(channel_id);
@@ -146,7 +273,10 @@ export async function handleHelpButton(interactionData) {
             '🔹 **スケジュールの確認**\n' +
             '「現在（次回）のスケジュール」のボタンを押すと、現時点のスケジュール情報を確認可能\n' +
             '🔹 **メンバーの募集**\n' +
-            '募集用パネルのボタンを押すと @everyone 宛てに募集通知を送信'
+            '募集用パネルのボタンを押すと @everyone 宛てに募集通知を送信\n\n' +
+            '🔹 **モンハン（ワールド／アイスボーン）**\n' +
+            '`/setup_mh_roles` で武器種・ランク・機種・募集通知ロールを設置\n' +
+            '`/hunt` でクエスト募集を作成し、参加・辞退・締切ボタンで管理'
         )
         .setColor(0x3b82f6)
         .toJSON();

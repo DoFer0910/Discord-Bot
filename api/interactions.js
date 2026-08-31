@@ -1,6 +1,8 @@
 import { verifyKey, InteractionType, InteractionResponseType } from 'discord-interactions';
-import { handleRoleButton, handleRecruitButton, handleHelpButton } from '../src/interactions.js';
-import { sendSetupRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse, sendSetupHelpResponse } from '../src/panels.js';
+import { waitUntil as vercelWaitUntil } from '@vercel/functions';
+import { Routes } from 'discord.js';
+import { handleRoleButton, handleRecruitButton, handleHelpButton, postHuntCommand, validateHuntCommand, createDiscordRest, handleHuntButton } from '../src/interactions.js';
+import { sendSetupRolesResponse, sendSetupMhRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse, sendSetupHelpResponse } from '../src/panels.js';
 import { handleScheduleButton, fetchAndSendSchedule } from '../src/schedule.js';
 
 export const config = {
@@ -15,6 +17,41 @@ async function getRawBody(req) {
         chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
     }
     return Buffer.concat(chunks).toString('utf8');
+}
+
+/** Discordへの非同期処理をVercelへ委譲する薄い境界。テストではwaitUntilImplを差し替えられる。 */
+export function scheduleBackground(task, waitUntilImpl = vercelWaitUntil) {
+    waitUntilImpl(task);
+}
+
+/**
+ * /huntの初回応答を即時deferし、募集投稿と元メッセージの結果PATCHを背景実行する。
+ * Discordの3秒制限を守りつつ、成功／失敗のどちらもユーザーへ返す。
+ */
+export function deferHuntInteraction(interactionData, {
+    waitUntilImpl = vercelWaitUntil,
+    restFactory = createDiscordRest,
+    postHuntCommandImpl = postHuntCommand,
+} = {}) {
+    const validation = validateHuntCommand(interactionData);
+    if (validation.error) {
+        return { type: 4, data: { content: validation.error, flags: 64 } };
+    }
+
+    const task = (async () => {
+        const result = await postHuntCommandImpl(interactionData);
+        try {
+            const rest = restFactory();
+            await rest.patch(
+                Routes.webhookMessage(interactionData.application_id, interactionData.token),
+                { body: { content: result.content } },
+            );
+        } catch (error) {
+            console.error('モンハン募集の結果メッセージ更新に失敗しました:', error);
+        }
+    })();
+    scheduleBackground(task, waitUntilImpl);
+    return { type: 5, data: { flags: 64 } };
 }
 
 export default async function handler(req, res) {
@@ -62,6 +99,16 @@ export default async function handler(req, res) {
                 return res.status(200).json(response);
             }
 
+            if (name === 'setup_mh_roles') {
+                const response = await sendSetupMhRolesResponse(body);
+                return res.status(200).json(response);
+            }
+
+            if (name === 'hunt') {
+                const response = deferHuntInteraction(body);
+                return res.status(200).json(response);
+            }
+
             if (name === 'schedule') {
                 const response = await fetchAndSendSchedule(body);
                 return res.status(200).json(response);
@@ -102,6 +149,12 @@ export default async function handler(req, res) {
             // 募集パネルのボタン
             if (customId === 'recruit_everyone') {
                 const response = await handleRecruitButton(body);
+                return res.status(200).json(response);
+            }
+
+            // モンハン募集の参加・辞退・締切ボタン
+            if (customId && customId.startsWith('mh_hunt_')) {
+                const response = await handleHuntButton(body);
                 return res.status(200).json(response);
             }
 
