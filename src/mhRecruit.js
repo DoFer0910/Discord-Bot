@@ -30,6 +30,7 @@ const BOT_ALLOW = (
   PermissionFlagsBits.ViewChannel
   | PermissionFlagsBits.SendMessages
   | PermissionFlagsBits.ReadMessageHistory
+  | PermissionFlagsBits.EmbedLinks
 ).toString();
 
 export function createMhRecruitPermissionOverwrites(guildId, botUserId) {

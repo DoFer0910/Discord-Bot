@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { PermissionFlagsBits } from 'discord.js';
 import {
   MH_NOTIFICATION_ROLE,
   MH_PLATFORM_ROLES,
@@ -114,6 +115,11 @@ test('モンハン募集チャンネルは重複判定と専用権限を持つ',
   assert.notEqual(overwrites[0].deny, '0', 'メンバーの通常メッセージ送信を禁止する');
   assert.equal(overwrites[1].id, 'bot-1');
   assert.notEqual(overwrites[1].allow, '0', 'Botにパネル投稿権限を付与する');
+  assert.notEqual(
+    BigInt(overwrites[1].allow) & PermissionFlagsBits.EmbedLinks,
+    0n,
+    'Botに募集Embedの送信権限を付与する',
+  );
 });
 
 test('常設パネルからモーダルを開き、入力を/hunt形式へ変換できる', () => {

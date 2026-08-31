@@ -51,7 +51,7 @@ Vercel サーバーレス関数（Interactions Webhook）として動作し、�
 3. **General Information** タブから **Public Key** と **Application ID** をコピー
 4. **OAuth2** → **URL Generator** で以下を選択:
    - **Scopes**: `bot`, `applications.commands`
-   - **Bot Permissions**: `Manage Channels`, `Manage Roles`, `View Channels`, `Send Messages`, `Read Message History`, `Use Slash Commands`
+   - **Bot Permissions**: `Manage Channels`, `Manage Roles`, `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Use Slash Commands`
 5. 生成された URL でサーバーに Bot を招待
 
 ### 2. プロジェクトの準備とデプロイ
@@ -101,7 +101,7 @@ npm run register_commands
 2. Bot名と同じロールを選び、次の権限を有効にします。
    - `チャンネルの管理`: `モンハン募集`チャンネルの作成と権限設定に必要
    - `ロールの管理`: 武器種・ランク・通知ロールの作成と付け外しに必要
-   - `チャンネルを見る`、`メッセージを送信`、`メッセージ履歴を読む`: 常設パネルの設置と更新に必要
+   - `チャンネルを見る`、`メッセージを送信`、`リンクを埋め込む`、`メッセージ履歴を読む`: 常設パネルの設置と更新に必要
    - `アプリコマンドを使用`: セットアップコマンドの実行に必要
 3. Botのロールを、Botが付与するモンハン用ロールより上へ移動します。Discordは自分より上のロールを操作できないためです。
 4. 設定後、管理者が `/setup_mh_recruit` を実行します。権限が足りない場合はBotがエラーを返すため、上記を再確認してください。
