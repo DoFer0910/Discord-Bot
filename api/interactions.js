@@ -4,11 +4,13 @@ import { Routes } from 'discord.js';
 import { handleRoleButton, handleRecruitButton, handleHelpButton, postHuntCommand, validateHuntCommand, createDiscordRest, handleHuntButton } from '../src/interactions.js';
 import { sendSetupRolesResponse, sendSetupMhRolesResponse, sendSetupScheduleResponse, sendSetupRecruitResponse, sendSetupHelpResponse } from '../src/panels.js';
 import {
+    MH_RECRUIT_SIMPLE_ID,
     MH_RECRUIT_OPEN_ID,
     MH_RECRUIT_MODAL_PREFIX,
     createMhRecruitModalResponse,
     modalToHuntInteraction,
     postMhRecruitFromModal,
+    postMhSimpleRecruit,
     setupMhRecruitChannel,
 } from '../src/mhRecruit.js';
 import { handleScheduleButton, fetchAndSendSchedule } from '../src/schedule.js';
@@ -105,6 +107,13 @@ export function deferMhRecruitModalInteraction(interactionData, dependencies = {
     return deferResultInteraction(interactionData, postMhRecruitFromModal, {
         ...dependencies,
         failureMessage: '❌ モンハン募集の投稿に失敗しました。',
+    });
+}
+
+export function deferMhRecruitSimpleInteraction(interactionData, dependencies = {}) {
+    return deferResultInteraction(interactionData, postMhSimpleRecruit, {
+        ...dependencies,
+        failureMessage: '❌ モンハンの簡易募集の投稿に失敗しました。',
     });
 }
 
@@ -213,6 +222,11 @@ export default async function handler(req, res) {
 
             if (customId === MH_RECRUIT_OPEN_ID) {
                 const response = createMhRecruitModalResponse(body);
+                return res.status(200).json(response);
+            }
+
+            if (customId === MH_RECRUIT_SIMPLE_ID) {
+                const response = deferMhRecruitSimpleInteraction(body);
                 return res.status(200).json(response);
             }
 
