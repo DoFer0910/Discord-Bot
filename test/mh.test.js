@@ -19,10 +19,13 @@ import {
 import { createHuntAllowedMentions } from '../src/interactions.js';
 import {
   MH_RECRUIT_CHANNEL_NAME,
+  MH_RECRUIT_SIMPLE_ID,
   MH_RECRUIT_OPEN_ID,
   createMhRecruitModalResponse,
   createMhRecruitPanelPayload,
   createMhRecruitPermissionOverwrites,
+  createMhSimpleRecruitAllowedMentions,
+  createMhSimpleRecruitPayload,
   findMhRecruitChannel,
   modalToHuntInteraction,
 } from '../src/mhRecruit.js';
@@ -120,11 +123,19 @@ test('モンハン募集チャンネルは重複判定と専用権限を持つ',
     0n,
     'Botに募集Embedの送信権限を付与する',
   );
+  assert.notEqual(
+    BigInt(overwrites[1].allow) & PermissionFlagsBits.MentionEveryone,
+    0n,
+    'Botに簡易募集の全員メンション権限を付与する',
+  );
 });
 
 test('常設パネルからモーダルを開き、入力を/hunt形式へ変換できる', () => {
   const panel = createMhRecruitPanelPayload();
-  assert.equal(panel.components[0].components[0].custom_id, MH_RECRUIT_OPEN_ID);
+  assert.equal(panel.components[0].components[0].custom_id, MH_RECRUIT_SIMPLE_ID);
+  assert.equal(panel.components[0].components[0].label, 'クエストを募集する');
+  assert.equal(panel.components[0].components[1].custom_id, MH_RECRUIT_OPEN_ID);
+  assert.equal(panel.components[0].components[1].label, '詳細募集');
   const modal = createMhRecruitModalResponse({ message: { id: 'panel-1' } });
   assert.equal(modal.type, 9);
   assert.equal(modal.data.components.length, 5);
@@ -162,4 +173,15 @@ test('常設パネルからモーダルを開き、入力を/hunt形式へ変換
     },
   });
   assert.match(invalid.error, /1〜3/);
+});
+
+test('簡易募集は全員メンションだけを許可し、表示名のメンションを無効化する', () => {
+  assert.deepEqual(createMhSimpleRecruitAllowedMentions(), {
+    parse: ['everyone'], users: [], roles: [], replied_user: false,
+  });
+  const payload = createMhSimpleRecruitPayload('@everyone <@user-1> <@&role-1>');
+  assert.equal(
+    payload.content,
+    '@everyone @\u200beveryone <@\u200buser-1> <@\u200b&role-1>さんがモンハンのクエスト募集を開始しました！',
+  );
 });

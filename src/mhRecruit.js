@@ -17,6 +17,7 @@ import {
 import { createDiscordRest, postHuntCommand, validateHuntCommand } from './interactions.js';
 
 export const MH_RECRUIT_CHANNEL_NAME = 'モンハン募集';
+export const MH_RECRUIT_SIMPLE_ID = 'mh_recruit_simple';
 export const MH_RECRUIT_OPEN_ID = 'mh_recruit_open';
 export const MH_RECRUIT_MODAL_PREFIX = 'mh_recruit_modal:';
 
@@ -31,6 +32,7 @@ const BOT_ALLOW = (
   | PermissionFlagsBits.SendMessages
   | PermissionFlagsBits.ReadMessageHistory
   | PermissionFlagsBits.EmbedLinks
+  | PermissionFlagsBits.MentionEveryone
 ).toString();
 
 export function createMhRecruitPermissionOverwrites(guildId, botUserId) {
@@ -55,7 +57,8 @@ export function createMhRecruitPanelPayload() {
   const embed = new EmbedBuilder()
     .setTitle('🎮 モンハン クエスト募集')
     .setDescription(
-      '下のボタンから募集内容を入力してください。\n'
+      '入力なしで募集する場合は「クエストを募集する」、\n' +
+      '対象や人数を指定する場合は「詳細募集」を押してください。\n'
       + '募集後はこのパネルが最下部へ移動します。',
     )
     .setColor(0xdc2626)
@@ -63,16 +66,49 @@ export function createMhRecruitPanelPayload() {
   const row = new ActionRowBuilder()
     .addComponents(
       new ButtonBuilder()
-        .setCustomId(MH_RECRUIT_OPEN_ID)
+        .setCustomId(MH_RECRUIT_SIMPLE_ID)
         .setLabel('クエストを募集する')
         .setEmoji('📢')
         .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(MH_RECRUIT_OPEN_ID)
+        .setLabel('詳細募集')
+        .setEmoji('📝')
+        .setStyle(ButtonStyle.Secondary),
     )
     .toJSON();
   return {
     embeds: [embed],
     components: [row],
     allowed_mentions: { parse: [] },
+  };
+}
+
+/** 簡易募集で使う表示名以外のメンションを無効化する。 */
+function escapeRecruitDisplayName(displayName) {
+  return String(displayName || 'メンバー').replaceAll('@', '@\u200b');
+}
+
+function recruitDisplayName(interactionData) {
+  const member = interactionData.member;
+  const user = interactionData.user;
+  return member?.nick
+    || member?.user?.global_name
+    || member?.user?.username
+    || user?.global_name
+    || user?.username
+    || 'メンバー';
+}
+
+export function createMhSimpleRecruitAllowedMentions() {
+  return { parse: ['everyone'], users: [], roles: [], replied_user: false };
+}
+
+export function createMhSimpleRecruitPayload(displayName) {
+  const safeDisplayName = escapeRecruitDisplayName(displayName);
+  return {
+    content: `@everyone ${safeDisplayName}さんがモンハンのクエスト募集を開始しました！`,
+    allowed_mentions: createMhSimpleRecruitAllowedMentions(),
   };
 }
 
@@ -250,6 +286,41 @@ export async function postMhRecruitFromModal(interactionData) {
     return {
       ok: false,
       content: '⚠️ 募集は投稿しましたが、常設パネルの再設置に失敗しました。管理者に連絡してください。',
+    };
+  }
+}
+
+/** 入力なしの簡易募集を投稿し、常設パネルを最下部へ再配置する。 */
+export async function postMhSimpleRecruit(interactionData) {
+  const rest = createDiscordRest();
+  try {
+    await rest.post(
+      Routes.channelMessages(interactionData.channel_id),
+      { body: createMhSimpleRecruitPayload(recruitDisplayName(interactionData)) },
+    );
+    await rest.post(
+      Routes.channelMessages(interactionData.channel_id),
+      { body: createMhRecruitPanelPayload() },
+    );
+    if (interactionData.message?.id) {
+      try {
+        await rest.delete(
+          Routes.channelMessage(interactionData.channel_id, interactionData.message.id),
+        );
+      } catch (error) {
+        console.error('古いモンハン募集パネルの削除に失敗しました:', error);
+        return {
+          ok: false,
+          content: '⚠️ 簡易募集と新しいパネルは投稿しましたが、古いパネルを削除できませんでした。',
+        };
+      }
+    }
+    return { ok: true, content: '✅ モンハンの簡易募集を投稿しました！' };
+  } catch (error) {
+    console.error('モンハン簡易募集の投稿またはパネル再設置に失敗しました:', error);
+    return {
+      ok: false,
+      content: '❌ モンハンの簡易募集の投稿に失敗しました。',
     };
   }
 }

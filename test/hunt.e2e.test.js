@@ -5,15 +5,18 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { PermissionFlagsBits } from 'discord.js';
 import {
   deferHuntInteraction,
   deferMhRecruitModalInteraction,
+  deferMhRecruitSimpleInteraction,
   deferMhRecruitSetupInteraction,
 } from '../api/interactions.js';
 import { handleHuntButton } from '../src/interactions.js';
 import { HUNT_BUTTON_IDS } from '../src/mh.js';
 import {
   MH_RECRUIT_MODAL_PREFIX,
+  MH_RECRUIT_SIMPLE_ID,
   MH_RECRUIT_OPEN_ID,
   createMhRecruitModalResponse,
 } from '../src/mhRecruit.js';
@@ -204,8 +207,13 @@ test('Webhookのdefer→Prism REST投稿→結果PATCHと募集操作を一連�
     const createdChannel = JSON.parse(setupRequests[1].body);
     assert.equal(createdChannel.name, 'モンハン募集');
     assert.equal(createdChannel.permission_overwrites.length, 2);
+    assert.notEqual(
+      BigInt(createdChannel.permission_overwrites[1].allow) & PermissionFlagsBits.MentionEveryone,
+      0n,
+    );
     const setupPanel = JSON.parse(setupRequests[3].body);
-    assert.equal(setupPanel.components[0].components[0].custom_id, MH_RECRUIT_OPEN_ID);
+    assert.equal(setupPanel.components[0].components[0].custom_id, MH_RECRUIT_SIMPLE_ID);
+    assert.equal(setupPanel.components[0].components[1].custom_id, MH_RECRUIT_OPEN_ID);
 
     const modalResponse = createMhRecruitModalResponse({ message: { id: 'old-panel' } });
     assert.equal(modalResponse.type, 9);
@@ -241,9 +249,45 @@ test('Webhookのdefer→Prism REST投稿→結果PATCHと募集操作を一連�
     const huntFromModal = JSON.parse(modalRequests[1].body);
     assert.equal(huntFromModal.embeds[0].fields.find(field => field.name === '対象').value, 'ミラボレアス');
     const latestPanel = JSON.parse(modalRequests[2].body);
-    assert.equal(latestPanel.components[0].components[0].custom_id, MH_RECRUIT_OPEN_ID);
+    assert.equal(latestPanel.components[0].components[0].custom_id, MH_RECRUIT_SIMPLE_ID);
+    assert.equal(latestPanel.components[0].components[1].custom_id, MH_RECRUIT_OPEN_ID);
     assert.equal(modalRequests[3].url, '/v10/channels/mh-channel/messages/old-panel');
     assert.equal(modalRequests[4].url, '/v10/webhooks/app-1/modal-token/messages/@original');
+
+    const simpleInteraction = {
+      application_id: 'app-1',
+      token: 'simple-token',
+      channel_id: 'mh-channel',
+      guild_id: 'guild-1',
+      message: { id: 'latest-panel' },
+      member: { user: { id: 'owner-4', username: '@everyone <@user-1> <@&role-1>' } },
+      data: { custom_id: MH_RECRUIT_SIMPLE_ID },
+    };
+    const simpleStart = proxy.requests.length;
+    const simpleTasks = [];
+    const simpleDeferred = deferMhRecruitSimpleInteraction(simpleInteraction, {
+      waitUntilImpl: task => simpleTasks.push(task),
+    });
+    assert.deepEqual(simpleDeferred, { type: 5, data: { flags: 64 } });
+    await simpleTasks[0];
+
+    const simpleRequests = proxy.requests.slice(simpleStart);
+    assert.deepEqual(simpleRequests.map(item => item.method), ['POST', 'POST', 'DELETE', 'PATCH']);
+    const simpleRecruitment = JSON.parse(simpleRequests[0].body);
+    assert.equal(
+      simpleRecruitment.content,
+      '@everyone @\u200beveryone <@\u200buser-1> <@\u200b&role-1>さんがモンハンのクエスト募集を開始しました！',
+    );
+    assert.deepEqual(simpleRecruitment.allowed_mentions, {
+      parse: ['everyone'], users: [], roles: [], replied_user: false,
+    });
+    const simplePanel = JSON.parse(simpleRequests[1].body);
+    assert.equal(simplePanel.components[0].components[0].custom_id, MH_RECRUIT_SIMPLE_ID);
+    assert.equal(simplePanel.components[0].components[1].custom_id, MH_RECRUIT_OPEN_ID);
+    assert.equal(simpleRequests[2].url, '/v10/channels/mh-channel/messages/latest-panel');
+    assert.deepEqual(JSON.parse(simpleRequests[3].body), {
+      content: '✅ モンハンの簡易募集を投稿しました！',
+    });
   } finally {
     if (proxy) proxy.server.close();
     prism.kill();
